@@ -10,14 +10,14 @@
   "dll": null,
   "smooth": 3,
   "fun": false,
-  "_comment_fun": "Fun mode alternates second by second: real, joke, real, next joke. Toggle from the tray icon. Each frame is [big, small]; null keeps the REAL reading for that slot, and the defaults never fake the temperature. NOTE 8088 is deliberate: the panel offsets the last two digits of a ~8000-range fan value by +20, so sending 8088 displays 8008. Values under about 1020 display verbatim, which is why 420 is sent as-is. See fan_map.txt and FINDINGS.md.",
+  "_comment_fun": "Fun mode alternates second by second: real, joke, real, next joke. Toggle from the tray icon. Each frame is [big, small]. 0 in the big slot is as close to blank as the panel gets -- the field always draws a number, there is no blanking value (the whole 0-127 range was calibrated). 0 degrees is impossible for a CPU, so it reads as obviously not a measurement. null instead of 0 would keep the real temperature. 8088 is deliberate: the panel offsets the last two digits of a ~8000-range fan value by +20, so 8088 displays as 8008. Values under about 1020 display verbatim, hence 420 as-is.",
   "fun_frames": [
     [
-      null,
+      0,
       8088
     ],
     [
-      null,
+      0,
       420
     ]
   ],

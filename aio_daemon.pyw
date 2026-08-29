@@ -12,22 +12,20 @@ but reports nothing, so this logs a clear warning rather than showing zeros.
 
 Fun mode (toggle it from the tray icon) alternates second by second:
 
-    1s  real stats
-    2s  fun_frames[0]      real temp / 8008
-    3s  real stats
-    4s  fun_frames[1]      real temp / 420
+    1s  real temp / real rpm
+    2s  0        / 8008          <- fun frame
+    3s  real temp / real rpm
+    4s  0        / 420           <- fun frame
     ... and loops
 
-Each frame is a [big, small] pair, and **null means "leave the real reading
-alone"**. The default frames only touch the fan slot, because a joke number in
-the big readout is drawn exactly like a temperature -- degree mark and all --
-so 69 there reads as a believable 69 C rather than as a joke. Keeping the
-temperature real at all times means the panel never lies about the one number
-you might actually act on, and the silliness is unmistakable in the fan slot
-where 8008 rpm is obvious nonsense.
+Each frame is a [big, small] pair. **0 in the big slot is as close to blank as
+this panel gets**: the field always draws a number -- the whole 0-127 range
+was calibrated and every value renders something, so there is no blanking
+value to send. 0 C is impossible for a running CPU, so it reads as obviously
+not a measurement, which is the point: the temperature is never shown as a
+plausible-but-fake number.
 
-Put a number in the first slot if you do want to fake the temperature. Note it
-is a 7-bit field: anything over 127 arrives as 127.
+**null** in a slot means "leave the real reading there" instead.
 
 Configuration lives in config.json next to this file, written with defaults
 on first run:
@@ -87,7 +85,7 @@ DEFAULTS = {
     "fun": False,
     # null = keep the real reading for that slot. Default: fan slot only, so
     # the temperature is never faked.
-    "fun_frames": [[None, 8008], [None, 420]],
+    "fun_frames": [[0, 8088], [0, 420]],
 }
 
 

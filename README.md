@@ -92,23 +92,23 @@ config, log, or quit. Settings live in `config.json` (copied from
 
 ### Fun mode
 
-Toggle it from the tray icon. The panel alternates second by second, with the
-**temperature left real throughout** — only the fan slot goes silly:
+Toggle it from the tray icon. The panel alternates second by second:
 
 ```
 1s  47 C / 1439 rpm       3s  47 C / 1439 rpm
-2s  47 C / 8008 rpm       4s  47 C /  420 rpm     ... and loops
+2s   0   / 8008 rpm       4s   0   /  420 rpm     ... and loops
 ```
 
-Each entry in `fun_frames` is a `[big, small]` pair and **`null` keeps the
-real reading** for that slot. The defaults only touch the fan because the big
-readout is drawn with a degree mark: a joke number there reads as a plausible
-temperature rather than as a joke, and you cannot tell at a glance whether the
-panel is being honest. Keeping it real means the one number worth acting on is
-never faked, while 8008 rpm is unmistakable nonsense.
+The temperature drops to **0** on the fun frames. That is as close to blank as
+this panel gets — the field always draws a number, and the whole 0–127 range
+was calibrated without finding a blanking value. 0 °C is impossible for a
+running CPU, so it reads as *obviously not a measurement*, which is the point:
+the temperature is never shown as a plausible-but-fake number, and real
+readings return the very next second.
 
-Put a number in the first slot — `[69, 8008]` — if you do want to fake the
-temperature too. It is a 7-bit field, so anything above 127 displays as 127.
+Each entry in `fun_frames` is a `[big, small]` pair. Use `null` instead of `0`
+to keep the real temperature there, or a number to fake it — it is a 7-bit
+field, so anything above 127 displays as 127.
 
 **Why a scheduled task rather than a Startup shortcut:** reading CPU
 temperature needs administrator rights, and a shortcut would fire a UAC prompt
