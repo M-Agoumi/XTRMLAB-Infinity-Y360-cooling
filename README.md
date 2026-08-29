@@ -90,6 +90,20 @@ window and sits in the system tray — hover for live values, right-click for
 config, log, or quit. Settings live in `config.json` (copied from
 `config.example.json` on first run); problems go to `aio_daemon.log`.
 
+### Fun mode
+
+Toggle it from the tray icon. The panel then alternates second by second:
+
+```
+1s  real stats        3s  real stats
+2s  69 / 8008         4s  420 / 8008      ... and loops
+```
+
+Edit `fun_frames` in `config.json` for your own pairs. One catch: the big
+readout is a **7-bit** field, so anything above 127 arrives as 127 — `420`
+displays as `127`. The fan slot is 16-bit, so `8008` is fine. `[42, 420]`
+puts 420 somewhere it can actually be read.
+
 **Why a scheduled task rather than a Startup shortcut:** reading CPU
 temperature needs administrator rights, and a shortcut would fire a UAC prompt
 on every boot. A Task Scheduler entry with *run with highest privileges* holds

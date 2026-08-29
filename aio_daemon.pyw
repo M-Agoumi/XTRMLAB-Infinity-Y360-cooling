@@ -10,6 +10,18 @@ the SuperIO chip and MSR registers, which need a kernel driver.
 LibreHardwareMonitor provides one. Without elevation the library still loads
 but reports nothing, so this logs a clear warning rather than showing zeros.
 
+Fun mode (toggle it from the tray icon) alternates second by second:
+
+    1s  real stats
+    2s  fun_frames[0]      69 / 8008
+    3s  real stats
+    4s  fun_frames[1]      420 / 8008
+    ... and loops
+
+Note the big readout is a 7-bit field, so it maxes out at 127: a big value of
+420 arrives on the glass as 127. 8008 in the fan slot is fine -- that one is
+16-bit. Put 420 in the small slot if you want to actually see it.
+
 Configuration lives in config.json next to this file, written with defaults
 on first run:
 
@@ -20,6 +32,8 @@ on first run:
       "fan":  "Fan #1",       sensor name or "#index"
       "hz":   1.0,
       "smooth": 3,            median of the last N samples; 1 = raw
+      "fun":  false,          alternate real readings with joke frames
+      "fun_frames": [[69, 8008], [420, 8008]],   [big, small] pairs
       "fahrenheit": false,
       "dll":  null            null = the copy bundled with PC Monitor
     }
@@ -55,6 +69,10 @@ DEFAULTS = {
     "fahrenheit": False,
     "dll": None,
     "smooth": 3,
+    # Fun mode: alternate real readings with fixed joke frames, one second
+    # each -- real, joke, real, next joke, looping through fun_frames.
+    "fun": False,
+    "fun_frames": [[69, 8008], [420, 8008]],
 }
 
 
@@ -136,6 +154,9 @@ class Daemon:
         self._small_hist = []
         self._warned_temp = False
         self._warned_fan = False
+        self._warned_clamp = False
+        self.fun = bool(cfg.get("fun", False))
+        self._tick = 0
 
     # -- data ---------------------------------------------------------
     def _open_sensors(self):
@@ -213,11 +234,17 @@ class Daemon:
                 if self.screen is None:
                     self._open_panel()
 
-                big, small = self.read()
-                if self.cfg.get("fahrenheit") and big > 123:
-                    big = 123           # the panel's 8-bit F conversion wraps past this
+                real_big, real_small = self.read()
+                joke = self.fun_frame()
+                if joke is not None:
+                    big, small = joke
+                else:
+                    big, small = real_big, real_small
+                    if self.cfg.get("fahrenheit") and big > 123:
+                        big = 123       # the panel's 8-bit F conversion wraps past this
                 self.screen.send(Stats(cpu_temp=big, cpu_fan=small))
                 self.last = (big, small)
+                self._tick += 1
                 self.status = "running"
                 backoff = 1.0
                 next_tick += period
@@ -259,12 +286,48 @@ class Daemon:
             pass
         log("stopped")
 
+    def fun_frame(self):
+        """
+        The joke frame for this tick, or None if this tick shows real stats.
+
+        Ticks alternate real / fun / real / next fun, so fun_frames is walked
+        one entry per fun tick rather than one per second.
+        """
+        if not self.fun or self._tick % 2 == 0:
+            return None
+        frames = self.cfg.get("fun_frames") or DEFAULTS["fun_frames"]
+        if not frames:
+            return None
+        pair = frames[(self._tick // 2) % len(frames)]
+        try:
+            big, small = int(pair[0]), int(pair[1])
+        except Exception:  # noqa: BLE001
+            return None
+        if big > 127 and not self._warned_clamp:
+            log(f"fun frame big value {big} exceeds the panel's 7-bit field "
+                f"and will display as 127")
+            self._warned_clamp = True
+        return big, small
+
+    def toggle_fun(self):
+        self.fun = not self.fun
+        self.cfg["fun"] = self.fun
+        self._tick = 0                    # restart on a real reading
+        try:
+            with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
+                json.dump(self.cfg, fh, indent=2)
+        except Exception as e:  # noqa: BLE001
+            log(f"could not persist fun setting: {e}")
+        log(f"fun mode {'ON' if self.fun else 'OFF'}")
+        return self.fun
+
     def tooltip(self):
         big, small = self.last
         unit = "F" if self.cfg.get("fahrenheit") else "C"
         if self.status.startswith("retrying"):
             return f"AIO screen - {self.status}"
-        return f"AIO screen\n{big} {unit}   {small} rpm"
+        suffix = "   [fun mode]" if self.fun else ""
+        return f"AIO screen\n{big} {unit}   {small} rpm{suffix}"
 
 
 def run_tray(daemon):
@@ -295,10 +358,17 @@ def run_tray(daemon):
     def on_open_config(_icon, _item):
         os.startfile(CONFIG_PATH)
 
+    def on_toggle_fun(icon, _item):
+        daemon.toggle_fun()
+        icon.update_menu()
+
     icon = pystray.Icon(
         "aio_screen", image, "AIO screen",
         menu=pystray.Menu(
             pystray.MenuItem(lambda _i: daemon.tooltip().replace("\n", "  "), None, enabled=False),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Fun mode", on_toggle_fun,
+                             checked=lambda _i: daemon.fun),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Edit config.json", on_open_config),
             pystray.MenuItem("Open log", on_open_log),

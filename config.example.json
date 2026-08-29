@@ -7,5 +7,18 @@
   "fan": "Fan #1",
   "hz": 1.0,
   "fahrenheit": false,
-  "dll": null
+  "dll": null,
+  "smooth": 3,
+  "fun": false,
+  "_comment_fun": "Fun mode alternates second by second: real, joke, real, next joke. Toggle it from the tray icon. NOTE the big readout is a 7-bit field, so anything over 127 displays as 127 -- 420 lands as 127. The fan slot is 16-bit, so 8008 shows fine. Try [42, 420] to see 420 on the glass.",
+  "fun_frames": [
+    [
+      69,
+      8008
+    ],
+    [
+      420,
+      8008
+    ]
+  ]
 }
