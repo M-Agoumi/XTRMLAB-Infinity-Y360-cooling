@@ -4,6 +4,12 @@ __pycache__/
 .venv/
 venv/
 
+# --- Machine-specific, generated on first run -------------------------
+# config.json is yours: sensor names differ per motherboard. The repo ships
+# config.example.json instead.
+config.json
+sensors.txt
+
 # --- Run output -------------------------------------------------------
 # Regenerated on every run; calibration_results.txt is kept deliberately,
 # since the measured table is the evidence behind the temperature encoding

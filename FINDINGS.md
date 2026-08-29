@@ -1,5 +1,10 @@
 # AIO pump-cap display — Findings
 
+> Interoperability notes. Everything here is a *description* of a wire format,
+> derived from the vendor application's own bytecode in order to make hardware
+> already owned work with software of the owner's choosing. No vendor code is
+> reproduced or redistributed.
+
 **Status: solved and verified on hardware (29 Aug 2026).** Both readouts are
 under host control, and the temperature encoding is calibrated rather than
 guessed.

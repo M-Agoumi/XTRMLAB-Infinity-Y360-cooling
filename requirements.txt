@@ -1,0 +1,7 @@
+# Driving the panel needs NOTHING: HID access goes through Windows' own
+# setupapi/hid.dll via ctypes (winhid.py). These are only for the extras.
+
+psutil                 # demo_stats.py: CPU/memory/disk figures
+pythonnet              # sensors.py: loads LibreHardwareMonitorLib for CPU temp + fan RPM
+pystray                # aio_daemon.pyw: system tray icon
+pillow                 # required by pystray

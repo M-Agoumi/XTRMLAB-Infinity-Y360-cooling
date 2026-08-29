@@ -40,6 +40,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 CONFIG_PATH = os.path.join(HERE, "config.json")
+EXAMPLE_CONFIG = os.path.join(HERE, "config.example.json")
 LOG_PATH = os.path.join(HERE, "aio_daemon.log")
 PID_PATH = os.path.join(HERE, "daemon.pid")
 ICON_PATH = os.path.join(HERE, "icon.ico")
@@ -102,9 +103,14 @@ def load_config():
             with open(CONFIG_PATH, encoding="utf-8") as fh:
                 cfg.update(json.load(fh))
         else:
+            # First run: seed from the shipped example if it is there, so the
+            # documented comments survive into the user's own copy.
+            if os.path.exists(EXAMPLE_CONFIG):
+                with open(EXAMPLE_CONFIG, encoding="utf-8") as fh:
+                    cfg.update(json.load(fh))
             with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
                 json.dump(cfg, fh, indent=2)
-            log(f"wrote default config to {CONFIG_PATH}")
+            log(f"wrote {CONFIG_PATH} (seeded from config.example.json)")
     except Exception as e:  # noqa: BLE001
         log(f"config error, using defaults: {e}")
     return cfg
