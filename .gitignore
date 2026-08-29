@@ -1,0 +1,31 @@
+# --- Python -----------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# --- Run output -------------------------------------------------------
+# Regenerated on every run; calibration_results.txt is kept deliberately,
+# since the measured table is the evidence behind the temperature encoding
+# and it is quoted in FINDINGS.md.
+test_output.log
+*.log
+
+# --- Local scratch ----------------------------------------------------
+*.bak
+*.tmp
+*.orig
+
+# --- Vendor material (do NOT commit) ----------------------------------
+# The PC Monitor binaries are proprietary. FINDINGS.md documents the
+# protocol; the vendor's code has no business in this repo.
+PC_Monitor.exe
+*.dll
+*.sys
+
+# --- Editors / OS -----------------------------------------------------
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+Desktop.ini
