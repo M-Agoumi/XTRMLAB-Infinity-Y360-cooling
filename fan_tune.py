@@ -1,22 +1,25 @@
 """
-fan_tune.py -- make the fan slot display the number you actually asked for.
+fan_tune.py -- measure the fan slot's digit offset. Two readings, not twenty.
 
-Sending 8008 puts 8028 on the glass. The panel scales what it is given, so to
-DISPLAY a number we have to send a different one. This finds the correction by
-measurement rather than by trusting a theory, then writes it to config.json as
-"fan_scale", after which every script here compensates automatically.
+The panel does not display the fan number verbatim. It renders it as TWO
+independent decimal fields -- everything above the last two digits, and the
+last two digits -- and the second field comes out offset:
 
-It works by search, not algebra, so it does not matter whether the firmware is
-scaling, rounding, or doing something stranger:
+    sent 8008  ->  80|08  ->  80|28  ->  shown 8028
+    sent 7988  ->  79|88  ->  79|08  ->  shown 7908
+    sent 7996  ->  79|96  ->  79|16  ->  shown 7916   (96+20 = 116, no carry)
 
-  1. send the target, ask what appeared
-  2. from that ratio, compute a better guess and try it
-  3. if still off, walk outward one step at a time until it lands exactly
+The offset is 20 on the unit this was written for. One reading is enough to
+measure it, because the offset is the whole story: read what 8008 displays as,
+subtract, done.
 
-Self-paced: read the SMALL number each time, type it, press Enter.
+(The first version of this script searched +/-1 around a scaled guess. That
+could never work: when the last-two field is wrong, every neighbour is wrong
+by the same amount, and the value that lands is 100 away, not 1. Sorry for
+the twenty trips to the case.)
 
-    python fan_tune.py            # tune for 8008
-    python fan_tune.py 1234
+    python fan_tune.py            # measure, verify, save
+    python fan_tune.py 1234       # verify against a different number
 """
 import json
 import os
@@ -24,7 +27,7 @@ import sys
 import threading
 import time
 
-from aio_screen import AioScreen, Stats
+from aio_screen import AioScreen, Stats, corrected_fan
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "config.json")
@@ -47,82 +50,71 @@ class Poster(threading.Thread):
                 pass
 
 
-def ask(poster, send_value, note=""):
-    poster.value = send_value
-    time.sleep(0.8)
-    print(f"\n  sending {send_value}{('   ' + note) if note else ''}")
+def ask(poster, value, note=""):
+    poster.value = value
+    time.sleep(0.9)
+    print(f"\n  sending {value}{('   ' + note) if note else ''}")
     while True:
         raw = input("  small number on the panel? ").strip()
         if raw.isdigit():
             return int(raw)
-        if raw == "":
-            print("  (please type the number you see)")
-        else:
-            print("  (digits only)")
+        print("  (digits only, please)")
 
 
 def main():
     target = int(sys.argv[1]) if len(sys.argv) > 1 else 8008
-    print(f"\nTuning the fan slot so it displays {target}.")
-    print("The big readout sits at 42 throughout, so the small one is unambiguous.")
+    print(f"\nMeasuring the fan slot's digit offset, using {target}.")
+    print("Two readings. The big readout stays at 42 so the small one is unambiguous.")
 
-    # fan_scale must be OFF while measuring, or we would be tuning a correction
-    # on top of a correction.
-    with AioScreen(fan_scale=None) as screen:
+    # correction OFF while measuring, or we would measure our own compensation
+    with AioScreen(fan_low2_offset=None) as screen:
         poster = Poster(screen)
         poster.start()
         try:
-            seen = ask(poster, target, "(the raw target)")
+            seen = ask(poster, target, "(raw, uncorrected)")
+
             if seen == target:
-                print(f"\n  It already displays {target} exactly -- no correction needed.")
-                save_scale(1.0)
+                print("\n  Displays verbatim -- no correction needed.")
+                save(None)
                 return
 
-            scale = seen / target
-            print(f"\n  {target} displayed as {seen}  ->  ratio {scale:.6f}")
-
-            guess = max(0, min(0xFFFF, round(target / scale)))
-            seen2 = ask(poster, guess, f"(computed from that ratio)")
-            if seen2 == target:
-                finish(target, guess)
+            if seen // 100 != target // 100:
+                print(f"\n  Unexpected: the upper digits changed too "
+                      f"({target // 100} -> {seen // 100}).")
+                print("  That is not the offset pattern this fixes. Run "
+                      "RUN_FAN_CALIBRATE.bat and send me fan_calibration.txt.")
                 return
 
-            # Walk outward from the guess: +1, -1, +2, -2 ... The firmware's
-            # rounding makes several inputs map to the same output, so a step
-            # or two either way normally lands it.
-            print(f"\n  {guess} displayed as {seen2}, not {target}. Walking outward.")
-            for step in range(1, 9):
-                for candidate in (guess + step, guess - step):
-                    if not 0 <= candidate <= 0xFFFF:
-                        continue
-                    got = ask(poster, candidate, f"(step {step})")
-                    if got == target:
-                        finish(target, candidate)
-                        return
-            print("\n  Could not land on it exactly. Send me fan_calibration.txt "
-                  "(RUN_FAN_CALIBRATE.bat) and I will work out the rule.")
+            offset = (seen % 100 - target % 100) % 100
+            print(f"\n  {target} displayed as {seen}")
+            print(f"  upper digits unchanged ({target // 100}), "
+                  f"last two {target % 100:02d} -> {seen % 100:02d}")
+            print(f"  => offset is +{offset} (mod 100)")
+
+            fixed = corrected_fan(target, offset)
+            got = ask(poster, fixed, f"(corrected, should display {target})")
+            if got == target:
+                print(f"\n  Confirmed: asking for {target} now displays {target}.")
+                save(offset)
+            else:
+                print(f"\n  Verification failed: sending {fixed} displayed {got}, "
+                      f"expected {target}.")
+                print("  Run RUN_FAN_CALIBRATE.bat and send me fan_calibration.txt.")
         finally:
             poster.stop.set()
             poster.join(timeout=2)
 
 
-def finish(target, send_value):
-    scale = target / send_value
-    print(f"\n  Sending {send_value} displays {target}.")
-    print(f"  fan_scale = {scale:.8f}")
-    save_scale(scale)
-
-
-def save_scale(scale):
+def save(offset):
     try:
         cfg = {}
         if os.path.exists(CONFIG_PATH):
             with open(CONFIG_PATH, encoding="utf-8") as fh:
                 cfg = json.load(fh)
-        cfg["fan_scale"] = round(scale, 8)
+        cfg["fan_low2_offset"] = offset
         with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
             json.dump(cfg, fh, indent=2)
-        print(f"  saved to {CONFIG_PATH}")
+        print(f"  saved fan_low2_offset = {offset} to config.json")
         print("\n  Restart the daemon (tray -> Quit, then the desktop shortcut).")
     except Exception as e:  # noqa: BLE001
         print(f"  could not write config.json: {e}")

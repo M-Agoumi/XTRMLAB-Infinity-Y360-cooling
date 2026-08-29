@@ -21,6 +21,6 @@
       420
     ]
   ],
-  "fan_scale": null,
-  "_comment_fan_scale": "The panel does not display the fan number verbatim: sending 8008 shows 8028. This is the measured displayed/sent ratio, and everything divides by it so the number you ask for is the number that appears. Run fan_tune.py to measure yours. null = send verbatim."
+  "fan_low2_offset": 20,
+  "_comment_fan_low2_offset": "The panel renders the fan value as two independent decimal fields and the last two digits come out +20 (mod 100), with no carry: sending 8008 shows 8028, sending 7996 shows 7916. The driver rolls them back so the number you ask for is the one displayed. null = send verbatim."
 }

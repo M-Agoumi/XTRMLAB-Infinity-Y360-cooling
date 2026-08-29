@@ -132,17 +132,28 @@ class Stats:
     when: Optional[datetime.datetime] = None   # defaults to now
 
 
-def corrected_fan(desired, scale) -> int:
+def corrected_fan(desired, low2_offset) -> int:
     """
     Pre-compensate the fan number so the panel displays what you asked for.
 
-    The firmware scales what it is given -- 8008 arrives on the glass as 8028
-    -- so to display D we must send D/scale, where scale is the measured
-    displayed/sent ratio.
+    The firmware renders the fan value as TWO independent decimal fields --
+    everything above the last two digits, and the last two digits -- and the
+    second field is offset. Measured on this panel: the last two digits come
+    out +20 (mod 100), with no carry into the hundreds.
+
+        sent 8008  ->  80|08  ->  80|28  ->  shown 8028
+        sent 7988  ->  79|88  ->  79|08  ->  shown 7908
+        sent 7996  ->  79|96  ->  79|16  ->  shown 7916   (96+20 = 116, no carry)
+
+    So to DISPLAY d, send the same upper digits with the last two rolled back
+    by the offset. Note the fix is +/-100 away from the naive value, which is
+    why searching one step at a time never lands: every neighbour of a wrong
+    value is wrong by the same amount.
     """
-    if not scale or scale <= 0:
+    if not low2_offset:
         return int(desired)
-    return max(0, min(0xFFFF, round(float(desired) / float(scale))))
+    d = max(0, min(0xFFFF, int(desired)))
+    return (d - d % 100) + ((d % 100 - int(low2_offset)) % 100)
 
 
 def _u8(v) -> int:
@@ -218,14 +229,14 @@ def find_panel():
 class AioScreen:
     def __init__(self, path: Optional[bytes] = None, fahrenheit: bool = False,
                  role: str = "", exclusive: bool = True,
-                 fan_scale: Optional[float] = None):
+                 fan_low2_offset: Optional[int] = None):
         self.path = path
         self.fahrenheit = fahrenheit
         # The panel does not display the fan number verbatim: sending 8008
-        # shows 8028. fan_scale is the measured displayed/sent ratio, and
-        # send() divides by it so the number you ask for is the number that
-        # appears. Measure yours with fan_tune.py. None = send verbatim.
-        self.fan_scale = fan_scale
+        # shows 8028. The last two decimal digits come out offset (by 20 on
+        # this unit) with no carry into the hundreds, so send() rolls them
+        # back. Measure yours with fan_tune.py. None = send verbatim.
+        self.fan_low2_offset = fan_low2_offset
         self._dev = None
         self.output_len = 0
         # Exactly one process may drive the panel: it has no arbitration, so
@@ -268,9 +279,9 @@ class AioScreen:
             payload = bytes(stats)
         else:
             flag = self.fahrenheit if fahrenheit is None else fahrenheit
-            if self.fan_scale:
+            if self.fan_low2_offset:
                 stats = replace(stats, cpu_fan=corrected_fan(stats.cpu_fan,
-                                                            self.fan_scale))
+                                                             self.fan_low2_offset))
             payload = build_report(stats, flag)
         # The report ID goes first; this panel uses 0 (no numbered reports).
         try:

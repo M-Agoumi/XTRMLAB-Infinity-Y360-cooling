@@ -136,15 +136,15 @@ server enabled and use `--lhm http://localhost:8085/data.json` instead.
 
 ### The fan slot does not display what you send
 
-Sending `8008` puts **`8028`** on the glass — the firmware scales the number
-by roughly 0.25%. Harmless for a real RPM reading, very visible when you want
-a specific number.
+Sending `8008` puts **`8028`** on the glass. The firmware draws the value as
+two independent decimal fields — everything above the last two digits, and the
+last two digits — and the second one is offset by +20 (mod 100), with no carry
+into the hundreds. So `7996` shows as `7916`.
 
-`RUN_FAN_TUNE.bat` fixes it by search rather than algebra: it sends your
-target, asks what appeared, computes a better value from that ratio, and walks
-outward a step at a time until it lands exactly. The result is written to
-`config.json` as `fan_scale`, after which every script here pre-compensates
-and the number you ask for is the number displayed.
+The driver rolls the last two digits back before sending, so what you ask for
+is what appears (`8008` → sends `8088`). It is controlled by
+`fan_low2_offset` in `config.json`, and **`RUN_FAN_TUNE.bat` measures yours in
+two readings**.
 
 `RUN_FAN_CALIBRATE.bat` is the fuller version — 15 values from 100 to 65535 —
 if you want the actual shape of the mapping rather than one corrected point.

@@ -69,18 +69,57 @@ Each field was driven with a counting ramp while the rest stayed at zero.
 Only two moved anything:
 
 - **big number ← `cpu_temp`** (offset 1)
-- **small number ← `cpu_fan`** (offset 5). NOT a plain pass-through: sending
-  8008 displays **8028**, a scale of about 1.0025. The original ramp test
-  (1000→1011 displaying 1000→1011) looked exact only because the error is
-  ~0.25% and the reading was taken by eye — at 1000 rpm that is 2 counts.
-  `fan_tune.py` measures the ratio and the driver pre-divides by it, so the
-  requested number is the displayed one.
+- **small number ← `cpu_fan`** (offset 5). NOT a plain pass-through — see
+  below.
 
 GPU, loads, power, memory, disk and the clock all did nothing. The other
 twelve fields exist because the vendor's larger panels use them.
 
 An earlier hypothesis — that the big number was the pump's own coolant
 sensor — is **wrong**. Every number on the glass comes from the host.
+
+## The fan slot renders two independent decimal fields
+
+Sending 8008 displays **8028**. That looks like a ~0.25% scale, and with only
+that one point plus an early ramp reading, a scale is what it looked like. It
+is not. Seventeen measured pairs show what is really happening:
+
+| sent | shown | upper | last two |
+|---:|---:|---|---|
+| 8008 | 8028 | 80 → 80 | 08 → 28 |
+| 7988 | 7908 | 79 → 79 | 88 → 08 |
+| 7990 | 7910 | 79 → 79 | 90 → 10 |
+| 7996 | 7916 | 79 → 79 | 96 → 16 |
+
+The firmware draws the number as **two independent fields** — everything above
+the last two digits, and the last two digits — and the second field is offset
+by **+20 (mod 100)**. There is no carry: 7996 shows 7916, because 96+20 = 116
+displays as 16 while the 79 stays 79.
+
+So to display `d`, send the same upper digits with the last two rolled back:
+
+```
+sent = (d - d % 100) + ((d % 100 - 20) % 100)
+   8008  ->  send 8088
+    420  ->  send  400
+   1439  ->  send 1419
+```
+
+`aio_screen.corrected_fan()` does this, driven by `fan_low2_offset` in
+`config.json`; `fan_tune.py` measures the offset in one reading.
+
+Two lessons recorded because both cost real time:
+
+1. The original ramp test (1000→1011 displaying 1000→1011) was read as proof
+   of a verbatim pass-through. It was not: in that range the last-two field
+   happened to be offset by an amount too small to notice against digits read
+   off a photo. A weak measurement was promoted to a documented fact.
+2. Hunting for the right input by stepping ±1 around a scaled guess is
+   hopeless against this mapping. When the last-two field is wrong, *every*
+   neighbouring value is wrong by the same amount; the value that lands is
+   100 away, not 1. Twenty manual steps produced twenty identical failures,
+   which is itself the clue — a constant error across a swept range means the
+   model is wrong, not the guess.
 
 ## The 0x80 temperature bit (calibrated)
 
