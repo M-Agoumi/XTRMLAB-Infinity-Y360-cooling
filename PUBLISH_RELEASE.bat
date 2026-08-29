@@ -6,8 +6,15 @@ rem  Publish a release: push, then create it on GitHub with the .exe attached.
 rem  Finds gh.exe even when winget's PATH update has not reached this shell,
 rem  which is the usual reason "gh is not recognized" survives a relaunch.
 
+rem  Default to the most recent tag rather than a hardcoded one, so this does
+rem  not quietly re-publish an old version after the next bump.
 set TAG=%1
-if "%TAG%"=="" set TAG=v1.1.0
+if "%TAG%"=="" for /f "delims=" %%T in ('git describe --tags --abbrev^=0 2^>nul') do set TAG=%%T
+if "%TAG%"=="" (
+    echo   No tag given and none found. Usage: PUBLISH_RELEASE.bat vX.Y.Z
+    pause
+    exit /b 1
+)
 
 echo ============================================================
 echo  Publishing %TAG%
