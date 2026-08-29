@@ -77,14 +77,20 @@ def main():
 
     # --- packages -------------------------------------------------------
     print()
+    frozen = bool(getattr(sys, "frozen", False))
+    if frozen:
+        print("  (running from the bundled .exe -- its libraries are built in)")
+
+    # required = the app cannot work without it. optional = only the extra
+    # command-line scripts use it, and those are not part of the .exe, so a
+    # missing one is not a fault when frozen.
     needed = {
-        "psutil": "demo_stats.py (CPU/memory/disk figures)",
-        "clr": "sensors.py (CPU temp + fan RPM) -- provided by 'pythonnet'",
-        "pystray": "aio_daemon.pyw (tray icon)",
-        "PIL": "tray icon rendering -- provided by 'pillow'",
+        "clr":     ("pythonnet", True,  "CPU temp + fan RPM"),
+        "pystray": ("pystray",   True,  "tray icon"),
+        "PIL":     ("pillow",    True,  "tray icon rendering"),
+        "psutil":  ("psutil",    False, "demo_stats.py only"),
     }
-    pip_names = {"clr": "pythonnet", "PIL": "pillow"}
-    for mod, why in needed.items():
+    for mod, (pip_name, required, why) in needed.items():
         try:
             if mod == "clr":
                 try:
@@ -93,10 +99,16 @@ def main():
                 except Exception:  # noqa: BLE001
                     pass
             importlib.import_module(mod)
-            c.ok(f"package {pip_names.get(mod, mod)}", why.split(" --")[0])
+            c.ok(f"package {pip_name}", why)
         except ImportError:
-            c.bad(f"package {pip_names.get(mod, mod)}", f"not installed; needed for {why}",
-                  f"pip install {pip_names.get(mod, mod)}   (or run INSTALL.bat)")
+            if required:
+                c.bad(f"package {pip_name}", f"not installed; needed for {why}",
+                      f"pip install {pip_name}   (or run INSTALL.bat)")
+            elif frozen:
+                c.ok(f"package {pip_name}", f"not bundled -- not needed ({why})")
+            else:
+                c.warn(f"package {pip_name}", f"not installed; only affects {why}",
+                       f"pip install {pip_name}")
 
     # --- the sensor library --------------------------------------------
     print()
@@ -144,9 +156,16 @@ def main():
             lock.release()
             c.ok("Panel is free", "nothing else is driving it")
         except PanelBusy as busy:
-            first = str(busy).splitlines()[0]
-            c.warn("Panel in use", first,
-                   "that is fine if it is the daemon; close it before running a demo")
+            holder = (busy.holder or {}).get("script") or "an unknown process"
+            pid = (busy.holder or {}).get("pid")
+            # Our own daemon holding the panel is the normal, healthy state --
+            # reporting it as a problem sends people looking for a fault.
+            if "aio_daemon" in str(holder) or "AIO Screen" in str(holder):
+                c.ok("Panel in use", f"by our own daemon ({holder}, pid {pid}) -- expected")
+            else:
+                c.warn("Panel in use", f"held by {holder} (pid {pid})",
+                       "close it -- two writers interleave frames. "
+                       "If it is the vendor app, run DISABLE_PC_MONITOR.bat")
     except Exception:  # noqa: BLE001
         pass
 
@@ -167,7 +186,8 @@ def main():
     if c.failures:
         print(f" {c.failures} thing(s) need fixing"
               + (f", {c.warnings} warning(s)" if c.warnings else ""))
-        print(" INSTALL.bat handles the packages and the DLL automatically.")
+        if not getattr(sys, "frozen", False):
+            print(" INSTALL.bat handles the packages and the DLL automatically.")
     elif c.warnings:
         print(f" Ready, with {c.warnings} warning(s) above.")
     else:
