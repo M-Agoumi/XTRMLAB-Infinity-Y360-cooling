@@ -105,8 +105,24 @@ sent = (d - d % 100) + ((d % 100 - 20) % 100)
    1439  ->  send 1419
 ```
 
-`aio_screen.corrected_fan()` does this, driven by `fan_low2_offset` in
-`config.json`; `fan_tune.py` measures the offset in one reading.
+**This model is incomplete and the correction ships DISABLED.** It fits every
+value measured between 7981 and 8008, and fails both known values under 1000:
+
+| sent | shown | +20 model predicts | |
+|---:|---:|---:|---|
+| 4 | 4 | 24 | ✗ (photographed) |
+| 420 | 420 | 440 | ✗ |
+| 1000 | 1001 | 1020 | ✗ |
+| 7988 | 7908 | 7908 | ✓ |
+| 8008 | 8028 | 8028 | ✓ |
+
+So the offset depends on magnitude, or on how many digits the panel is
+drawing — seventeen samples from one narrow band could never distinguish
+those. `fan_map.py` walks values across the whole range to settle it.
+
+`aio_screen.corrected_fan()` implements the offset, driven by
+`fan_low2_offset` in `config.json` (`null` = send verbatim, the default until
+the mapping is known).
 
 Two lessons recorded because both cost real time:
 
@@ -114,7 +130,11 @@ Two lessons recorded because both cost real time:
    of a verbatim pass-through. It was not: in that range the last-two field
    happened to be offset by an amount too small to notice against digits read
    off a photo. A weak measurement was promoted to a documented fact.
-2. Hunting for the right input by stepping ±1 around a scaled guess is
+2. Sampling one narrow band and generalising to the whole range. Seventeen
+   readings between 7981 and 8008 produced a confident model that two much
+   older data points — a photograph, and a value that had been quietly
+   working — already contradicted. Range matters more than sample count.
+3. Hunting for the right input by stepping ±1 around a scaled guess is
    hopeless against this mapping. When the last-two field is wrong, *every*
    neighbouring value is wrong by the same amount; the value that lands is
    100 away, not 1. Twenty manual steps produced twenty identical failures,

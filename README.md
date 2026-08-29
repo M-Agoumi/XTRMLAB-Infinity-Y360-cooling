@@ -141,10 +141,12 @@ two independent decimal fields — everything above the last two digits, and the
 last two digits — and the second one is offset by +20 (mod 100), with no carry
 into the hundreds. So `7996` shows as `7916`.
 
-The driver rolls the last two digits back before sending, so what you ask for
-is what appears (`8008` → sends `8088`). It is controlled by
-`fan_low2_offset` in `config.json`, and **`RUN_FAN_TUNE.bat` measures yours in
-two readings**.
+But that offset does **not** apply below 1000: `4` displays as `4` and `420`
+as `420`. So the correction (`fan_low2_offset` in `config.json`) ships
+**disabled** — enabling it fixes 8008 and breaks 420.
+
+`RUN_FAN_MAP.bat` walks ten values across the whole range to establish where
+the behaviour changes.
 
 `RUN_FAN_CALIBRATE.bat` is the fuller version — 15 values from 100 to 65535 —
 if you want the actual shape of the mapping rather than one corrected point.

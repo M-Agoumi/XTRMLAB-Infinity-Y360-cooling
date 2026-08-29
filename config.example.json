@@ -21,6 +21,6 @@
       420
     ]
   ],
-  "fan_low2_offset": 20,
-  "_comment_fan_low2_offset": "The panel renders the fan value as two independent decimal fields and the last two digits come out +20 (mod 100), with no carry: sending 8008 shows 8028, sending 7996 shows 7916. The driver rolls them back so the number you ask for is the one displayed. null = send verbatim."
+  "fan_low2_offset": null,
+  "_comment_fan_low2_offset": "Correction for the fan slot's digit offset. Currently OFF (null) because the +20 pattern measured around 8000 does NOT hold below 1000: 4 displays as 4 and 420 as 420. Run fan_map.py to map the real behaviour across the range."
 }
