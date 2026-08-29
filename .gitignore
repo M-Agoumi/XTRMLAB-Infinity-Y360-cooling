@@ -24,6 +24,11 @@ daemon.pid
 *.tmp
 *.orig
 
+# --- Downloaded third-party binaries ----------------------------------
+# INSTALL.bat fetches LibreHardwareMonitorLib.dll here from its own project.
+# It is MPL-2.0 and is not ours to redistribute.
+lib/
+
 # --- Vendor material (do NOT commit) ----------------------------------
 # The PC Monitor binaries are proprietary. FINDINGS.md documents the
 # protocol; the vendor's code has no business in this repo.

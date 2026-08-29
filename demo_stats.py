@@ -165,12 +165,12 @@ def main():
 
     lhm_lib = None
     if args.admin_sensors or args.list_sensors:
-        from sensors import LhmSensors, SensorError, is_admin, DEFAULT_DLL
+        from sensors import LhmSensors, SensorError, is_admin
         if not is_admin():
             print("!! not running as administrator -- CPU temp and fan RPM will read 0.")
             print("   use RUN_CPU_DEMO.bat, which elevates for you.\n")
         try:
-            lhm_lib = LhmSensors(args.dll or DEFAULT_DLL)
+            lhm_lib = LhmSensors(args.dll)
         except SensorError as e:
             print(f"sensor init failed: {e}")
             return

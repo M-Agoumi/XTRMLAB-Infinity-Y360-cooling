@@ -139,13 +139,14 @@ class Daemon:
 
     # -- data ---------------------------------------------------------
     def _open_sensors(self):
-        from sensors import LhmSensors, DEFAULT_DLL, is_admin
+        from sensors import LhmSensors, is_admin
         if not is_admin():
             log("WARNING: not elevated -- CPU temp and fan RPM will read 0. "
                 "Install with INSTALL_STARTUP.bat so the task runs with highest privileges.")
-        self.sensors = LhmSensors(self.cfg.get("dll") or DEFAULT_DLL)
+        self.sensors = LhmSensors(self.cfg.get("dll"))
         t = self.sensors.pick_temp(self.cfg.get("temp"))
         f = self.sensors.pick_fan(self.cfg.get("fan"))
+        log(f"sensors via {self.sensors.dll_path}")
         log(f"temp sensor = {t[1] if t else None!r}, fan sensor = {f[1] if f else None!r}")
 
     def _open_panel(self):

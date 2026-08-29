@@ -32,10 +32,23 @@ one, twelve of them do nothing. See [FINDINGS.md](FINDINGS.md).
 ## Install
 
 ```
-git clone <this repo>
-cd aio_screen
-pip install -r requirements.txt      # only for the demo, sensors and tray
+INSTALL.bat
 ```
+
+That installs the Python packages, downloads `LibreHardwareMonitorLib.dll`
+from the LibreHardwareMonitor project's own releases (it is MPL-2.0 and not
+bundled here — if the vendor app is installed, its existing copy is used
+instead), and finishes by running the environment check.
+
+By hand, if you prefer: `pip install -r requirements.txt`. Driving the panel
+needs no packages at all; they are for the demo, the sensor reading and the
+tray icon.
+
+**`RUN_DOCTOR.bat` tells you exactly what is missing** — Python version and
+bitness, each package and what it is for, whether the DLL was found and where
+it looked, whether the panel is present and accepts a 64-byte report, whether
+something else is already driving it, and whether the autostart task exists.
+Every failure prints the command that fixes it.
 
 Close the vendor "PC Monitor" app first — the `RUN_*.bat` wrappers do it for
 you. Two writers do not error out, they interleave frames.
@@ -173,6 +186,8 @@ tools that worked it out are included:
 | `aio_daemon.pyw` | background tray app |
 | `demo_stats.py` | live demo; `--big`/`--small` choose each readout |
 | `start_panel.vbs` | what the desktop shortcut runs |
+| `doctor.py` | environment check: what is missing and how to fix it |
+| `install.ps1` | packages + downloads the sensor DLL |
 
 ## How this was worked out
 

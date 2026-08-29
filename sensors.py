@@ -28,7 +28,27 @@ from __future__ import annotations
 import ctypes
 import os
 
-DEFAULT_DLL = r"C:\Program Files (x86)\PC Monitor\LibreHardwareMonitorLib.dll"
+# Searched in order. `lib/` is where INSTALL.bat puts a downloaded copy; the
+# PC Monitor path is where the vendor app already has one on machines that
+# shipped with it.
+DLL_CANDIDATES = (
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib",
+                 "LibreHardwareMonitorLib.dll"),
+    r"C:\Program Files (x86)\PC Monitor\LibreHardwareMonitorLib.dll",
+    r"C:\Program Files\LibreHardwareMonitor\LibreHardwareMonitorLib.dll",
+    r"C:\Program Files (x86)\LibreHardwareMonitor\LibreHardwareMonitorLib.dll",
+)
+
+
+def find_dll(explicit: str | None = None) -> str | None:
+    """First LibreHardwareMonitorLib.dll that actually exists, or None."""
+    for path in ([explicit] if explicit else []) + list(DLL_CANDIDATES):
+        if path and os.path.exists(path):
+            return path
+    return None
+
+
+DEFAULT_DLL = DLL_CANDIDATES[1]
 
 
 class SensorError(RuntimeError):
@@ -45,10 +65,14 @@ def is_admin() -> bool:
 class LhmSensors:
     """Thin wrapper over LibreHardwareMonitor's Computer object."""
 
-    def __init__(self, dll_path: str = DEFAULT_DLL):
-        if not os.path.exists(dll_path):
-            raise SensorError(f"LibreHardwareMonitorLib.dll not found at:\n    {dll_path}\n"
-                              f"Pass --dll with the right path.")
+    def __init__(self, dll_path: str | None = None):
+        dll_path = find_dll(dll_path)
+        if not dll_path:
+            raise SensorError(
+                "LibreHardwareMonitorLib.dll was not found. Looked in:\n"
+                + "\n".join(f"    {c}" for c in DLL_CANDIDATES)
+                + "\n\nRun INSTALL.bat to download it, or pass --dll with a path.")
+        self.dll_path = dll_path
         try:
             # pythonnet 3 defaults to .NET Core; this DLL is net472, so ask
             # for the .NET Framework runtime explicitly before clr is imported.
@@ -244,7 +268,7 @@ class LhmSensors:
 def main():
     import argparse
     ap = argparse.ArgumentParser(description="list every sensor LibreHardwareMonitor can see")
-    ap.add_argument("--dll", default=DEFAULT_DLL)
+    ap.add_argument("--dll", default=None, help="path to LibreHardwareMonitorLib.dll")
     args = ap.parse_args()
 
     if not is_admin():
