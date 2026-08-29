@@ -69,8 +69,12 @@ Each field was driven with a counting ramp while the rest stayed at zero.
 Only two moved anything:
 
 - **big number ← `cpu_temp`** (offset 1)
-- **small number ← `cpu_fan`** (offset 5), a plain RPM integer: sending
-  1000→1011 displayed 1000→1011 exactly
+- **small number ← `cpu_fan`** (offset 5). NOT a plain pass-through: sending
+  8008 displays **8028**, a scale of about 1.0025. The original ramp test
+  (1000→1011 displaying 1000→1011) looked exact only because the error is
+  ~0.25% and the reading was taken by eye — at 1000 rpm that is 2 counts.
+  `fan_tune.py` measures the ratio and the driver pre-divides by it, so the
+  requested number is the displayed one.
 
 GPU, loads, power, memory, disk and the clock all did nothing. The other
 twelve fields exist because the vendor's larger panels use them.

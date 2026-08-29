@@ -79,7 +79,7 @@ the vendor's hidapi.dll is 32-bit against a 64-bit Python.
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 import winhid
@@ -130,6 +130,19 @@ class Stats:
     disk_load: int = 0         # %
     disk_total_gb: int = 0     # GB
     when: Optional[datetime.datetime] = None   # defaults to now
+
+
+def corrected_fan(desired, scale) -> int:
+    """
+    Pre-compensate the fan number so the panel displays what you asked for.
+
+    The firmware scales what it is given -- 8008 arrives on the glass as 8028
+    -- so to display D we must send D/scale, where scale is the measured
+    displayed/sent ratio.
+    """
+    if not scale or scale <= 0:
+        return int(desired)
+    return max(0, min(0xFFFF, round(float(desired) / float(scale))))
 
 
 def _u8(v) -> int:
@@ -204,9 +217,15 @@ def find_panel():
 
 class AioScreen:
     def __init__(self, path: Optional[bytes] = None, fahrenheit: bool = False,
-                 role: str = "", exclusive: bool = True):
+                 role: str = "", exclusive: bool = True,
+                 fan_scale: Optional[float] = None):
         self.path = path
         self.fahrenheit = fahrenheit
+        # The panel does not display the fan number verbatim: sending 8008
+        # shows 8028. fan_scale is the measured displayed/sent ratio, and
+        # send() divides by it so the number you ask for is the number that
+        # appears. Measure yours with fan_tune.py. None = send verbatim.
+        self.fan_scale = fan_scale
         self._dev = None
         self.output_len = 0
         # Exactly one process may drive the panel: it has no arbitration, so
@@ -249,6 +268,9 @@ class AioScreen:
             payload = bytes(stats)
         else:
             flag = self.fahrenheit if fahrenheit is None else fahrenheit
+            if self.fan_scale:
+                stats = replace(stats, cpu_fan=corrected_fan(stats.cpu_fan,
+                                                            self.fan_scale))
             payload = build_report(stats, flag)
         # The report ID goes first; this panel uses 0 (no numbered reports).
         try:

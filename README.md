@@ -134,6 +134,21 @@ running elevated, because the library's driver does.
 Prefer not to run elevated? Run the LibreHardwareMonitor GUI with its web
 server enabled and use `--lhm http://localhost:8085/data.json` instead.
 
+### The fan slot does not display what you send
+
+Sending `8008` puts **`8028`** on the glass — the firmware scales the number
+by roughly 0.25%. Harmless for a real RPM reading, very visible when you want
+a specific number.
+
+`RUN_FAN_TUNE.bat` fixes it by search rather than algebra: it sends your
+target, asks what appeared, computes a better value from that ratio, and walks
+outward a step at a time until it lands exactly. The result is written to
+`config.json` as `fan_scale`, after which every script here pre-compensates
+and the number you ask for is the number displayed.
+
+`RUN_FAN_CALIBRATE.bat` is the fuller version — 15 values from 100 to 65535 —
+if you want the actual shape of the mapping rather than one corrected point.
+
 ### Sensor names are board-specific — check yours
 
 **`RUN_SENSORS.bat`** lists every sensor with an index and value. Match them

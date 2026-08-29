@@ -42,6 +42,7 @@ on first run:
       "fun":  false,          alternate real readings with joke frames
       "fun_frames": [[69, 8008], [42, 420]],   [big, small] pairs
       "fahrenheit": false,
+      "fan_scale": null,      measured displayed/sent ratio (see fan_tune.py)
       "dll":  null            null = the copy bundled with PC Monitor
     }
 
@@ -78,6 +79,9 @@ DEFAULTS = {
     "smooth": 3,
     # Fun mode: alternate real readings with fixed joke frames, one second
     # each -- real, joke, real, next joke, looping through fun_frames.
+    # Measured displayed/sent ratio for the fan slot; null = send verbatim.
+    # Run fan_tune.py to work yours out.
+    "fan_scale": None,
     "fun": False,
     # null = keep the real reading for that slot. Default: fan slot only, so
     # the temperature is never faked.
@@ -182,8 +186,10 @@ class Daemon:
     def _open_panel(self):
         from aio_screen import AioScreen
         self.screen = AioScreen(fahrenheit=self.cfg.get("fahrenheit", False),
-                                role="aio_daemon.pyw").open()
-        log(f"panel open, output report {self.screen.output_len} bytes")
+                                role="aio_daemon.pyw",
+                                fan_scale=self.cfg.get("fan_scale")).open()
+        log(f"panel open, output report {self.screen.output_len} bytes"
+            + (f", fan_scale={self.screen.fan_scale}" if self.screen.fan_scale else ""))
 
     def read(self):
         """
