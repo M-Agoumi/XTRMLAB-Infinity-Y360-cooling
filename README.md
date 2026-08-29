@@ -55,6 +55,26 @@ prompt on every single boot. A Task Scheduler entry with "run with highest
 privileges" holds the elevation itself, so it starts silently. This is the
 same mechanism the vendor app uses.
 
+### Only one writer at a time
+
+The panel has no arbitration: any process that opens it can post a frame and
+the last one wins. Two writers do not error — they interleave, which looks
+like the display updating twice a second with one wrong reading.
+
+So every script here takes an exclusive lock inside `AioScreen.open()`. A
+second one refuses to start and names what is holding it:
+
+```
+The panel is already being driven by aio_daemon.pyw (pid 4242, running 1h01m).
+    That is the background daemon. Quit it from the tray icon,
+    or run UNINSTALL_STARTUP.bat, then try again.
+    To run anyway (they WILL fight): set AIO_FORCE=1
+```
+
+A lock left behind by a crash is detected (the recorded pid is checked for
+liveness) and taken over, so it cannot wedge. `RUN_WHO.bat` lists every
+process that could be posting.
+
 ### Picking the right sensors
 
 Boards expose several plausible-looking candidates and choosing wrong is

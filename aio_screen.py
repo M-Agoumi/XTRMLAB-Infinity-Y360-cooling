@@ -83,6 +83,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import winhid
+from panel_lock import PanelLock, PanelBusy   # noqa: F401  (re-exported)
 
 VENDOR_ID = 0x5131
 PRODUCT_ID = 0x2007
@@ -202,15 +203,23 @@ def find_panel():
 
 
 class AioScreen:
-    def __init__(self, path: Optional[bytes] = None, fahrenheit: bool = False):
+    def __init__(self, path: Optional[bytes] = None, fahrenheit: bool = False,
+                 role: str = "", exclusive: bool = True):
         self.path = path
         self.fahrenheit = fahrenheit
         self._dev = None
         self.output_len = 0
+        # Exactly one process may drive the panel: it has no arbitration, so
+        # two writers silently interleave frames instead of erroring.
+        self._lock = PanelLock(role) if exclusive else None
 
     def open(self):
+        if self._lock is not None:
+            self._lock.acquire()          # raises PanelBusy, naming the holder
         candidates = find_panel()
         if not candidates:
+            if self._lock is not None:
+                self._lock.release()
             raise AioScreenError(
                 f"no HID device with VID 0x{VENDOR_ID:04X} PID 0x{PRODUCT_ID:04X}. "
                 f"Is the AIO's USB header plugged in? Run list_hid.py to see what IS present."
@@ -220,6 +229,8 @@ class AioScreen:
         try:
             self._dev = winhid.Device(path, chosen.get("output_len", 0))
         except OSError as e:
+            if self._lock is not None:
+                self._lock.release()
             raise AioScreenError(
                 f"could not open the panel: {e}. Close the vendor 'PC Monitor' app and retry."
             )
@@ -252,6 +263,8 @@ class AioScreen:
             except Exception:  # noqa: BLE001
                 pass
             self._dev = None
+        if self._lock is not None:
+            self._lock.release()
 
     def __enter__(self):
         return self.open()

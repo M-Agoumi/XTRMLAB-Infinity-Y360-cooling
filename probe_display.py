@@ -72,4 +72,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from panel_lock import PanelBusy
+
+    try:
+        main()
+    except PanelBusy as busy:
+        print(f"\n{busy}\n")
+        raise SystemExit(1)

@@ -85,10 +85,12 @@ def load_config():
     return cfg
 
 
-def single_instance():
-    """A second copy would fight the first for the HID handle."""
-    handle = ctypes.windll.kernel32.CreateMutexW(None, False, "Global\\aio_screen_daemon")
-    return handle and ctypes.windll.kernel32.GetLastError() != 183   # ERROR_ALREADY_EXISTS
+# The old private mutex here had two faults: creating a Global object needs a
+# privilege a non-elevated run does not have, so the call failed and the
+# daemon concluded (wrongly) that a copy was running; and it guarded only the
+# daemon, while the actual collision was a leftover demo_stats.py window.
+# Exclusion now lives in panel_lock.py, acquired by AioScreen.open(), so every
+# script that touches the panel participates.
 
 
 class Daemon:
@@ -117,7 +119,8 @@ class Daemon:
 
     def _open_panel(self):
         from aio_screen import AioScreen
-        self.screen = AioScreen(fahrenheit=self.cfg.get("fahrenheit", False)).open()
+        self.screen = AioScreen(fahrenheit=self.cfg.get("fahrenheit", False),
+                                role="aio_daemon.pyw").open()
         log(f"panel open, output report {self.screen.output_len} bytes")
 
     def read(self):
@@ -164,6 +167,7 @@ class Daemon:
     # -- loop ---------------------------------------------------------
     def run(self):
         from aio_screen import Stats
+        from panel_lock import PanelBusy
         period = 1.0 / max(0.1, float(self.cfg.get("hz", 1.0)))
         backoff = 1.0
         # Pace against a fixed schedule. Sleeping `period` AFTER the work makes
@@ -190,6 +194,15 @@ class Daemon:
                     next_tick = time.monotonic()
                     delay = 0
                 self.stop.wait(delay)
+            except PanelBusy as busy:
+                # Another writer holds the panel. Retrying forever would just
+                # fight it, so back off hard and say so plainly.
+                self.status = "another process is driving the panel"
+                log(f"panel busy: {busy}")
+                self.screen = None
+                self.stop.wait(30)
+                next_tick = time.monotonic()
+                continue
             except Exception as e:  # noqa: BLE001
                 # Unplugged panel, sleep/resume, driver hiccup: drop everything
                 # and rebuild on the next pass rather than dying silently.
@@ -274,9 +287,6 @@ def run_tray(daemon):
 
 
 def main():
-    if not single_instance():
-        log("another copy is already running -- exiting")
-        return
     log("=" * 60)
     log(f"starting (python {sys.version.split()[0]}, elevated="
         f"{bool(ctypes.windll.shell32.IsUserAnAdmin())})")
