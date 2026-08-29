@@ -32,12 +32,15 @@ if exist "%~dp0lib\LibreHardwareMonitorLib.dll" (
 
 echo.
 echo [3/4] running PyInstaller  (this takes a minute or two)
-python -m PyInstaller --noconfirm --clean --onefile aio_screen.spec
+rem  No --onefile here: the .spec decides that, and passing both is an error.
+rem  BUILD_EXE_FOLDER.bat sets AIO_ONEDIR for the folder build instead.
+python -m PyInstaller --noconfirm --clean aio_screen.spec
 if errorlevel 1 (
     echo.
-    echo   Build failed. The usual culprit is pythonnet: try the folder build
-    echo   instead, which is less fussy:
-    echo       python -m PyInstaller --noconfirm --clean aio_screen.spec
+    echo   Build failed -- see the error above.
+    echo   If it mentions pythonnet, clr or the .NET runtime, try the folder
+    echo   build, which does not have to unpack the runtime at startup:
+    echo       BUILD_EXE_FOLDER.bat
     pause
     exit /b 1
 )

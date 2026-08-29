@@ -14,6 +14,10 @@ Notes on the awkward parts:
     and why everything else goes to aio_daemon.log.
   * pythonnet needs clr_loader and its runtime config collected explicitly;
     PyInstaller does not always follow the .NET side on its own.
+  * one-file vs one-folder is decided HERE, not on the command line: passing
+    --onefile alongside a .spec is an error, because the spec already says
+    which it is. Set AIO_ONEDIR=1 to get the folder build, which is the one
+    to try if the single file has trouble loading the .NET runtime.
   * LibreHardwareMonitorLib.dll is bundled if present. It is MPL-2.0, which
     permits redistributing the unmodified binary as long as the licence
     travels with it -- lib/THIRD-PARTY.txt does that, and is bundled too.
@@ -77,13 +81,16 @@ a = Analysis(
 )
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+ONEDIR = bool(os.environ.get("AIO_ONEDIR"))
+
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
+    [] if ONEDIR else a.binaries,
+    [] if ONEDIR else a.zipfiles,
+    [] if ONEDIR else a.datas,
     [],
+    exclude_binaries=ONEDIR,
     name="AIO Screen",
     debug=False,
     bootloader_ignore_signals=False,
@@ -96,3 +103,14 @@ exe = EXE(
     uac_admin=True,
     version_file=None,
 )
+
+if ONEDIR:
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        strip=False,
+        upx=False,
+        name="AIO Screen",
+    )
