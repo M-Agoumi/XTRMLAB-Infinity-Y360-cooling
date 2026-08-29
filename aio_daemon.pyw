@@ -13,14 +13,21 @@ but reports nothing, so this logs a clear warning rather than showing zeros.
 Fun mode (toggle it from the tray icon) alternates second by second:
 
     1s  real stats
-    2s  fun_frames[0]      69 / 8008
+    2s  fun_frames[0]      real temp / 8008
     3s  real stats
-    4s  fun_frames[1]      42 / 420
+    4s  fun_frames[1]      real temp / 420
     ... and loops
 
-Note the big readout is a 7-bit field, so it maxes out at 127: a big value of
-420 arrives on the glass as 127. 8008 in the fan slot is fine -- that one is
-16-bit. Put 420 in the small slot if you want to actually see it.
+Each frame is a [big, small] pair, and **null means "leave the real reading
+alone"**. The default frames only touch the fan slot, because a joke number in
+the big readout is drawn exactly like a temperature -- degree mark and all --
+so 69 there reads as a believable 69 C rather than as a joke. Keeping the
+temperature real at all times means the panel never lies about the one number
+you might actually act on, and the silliness is unmistakable in the fan slot
+where 8008 rpm is obvious nonsense.
+
+Put a number in the first slot if you do want to fake the temperature. Note it
+is a 7-bit field: anything over 127 arrives as 127.
 
 Configuration lives in config.json next to this file, written with defaults
 on first run:
@@ -72,7 +79,9 @@ DEFAULTS = {
     # Fun mode: alternate real readings with fixed joke frames, one second
     # each -- real, joke, real, next joke, looping through fun_frames.
     "fun": False,
-    "fun_frames": [[69, 8008], [42, 420]],
+    # null = keep the real reading for that slot. Default: fan slot only, so
+    # the temperature is never faked.
+    "fun_frames": [[None, 8008], [None, 420]],
 }
 
 
@@ -235,13 +244,17 @@ class Daemon:
                     self._open_panel()
 
                 real_big, real_small = self.read()
+                big, small = real_big, real_small
+                if self.cfg.get("fahrenheit") and big > 123:
+                    big = 123           # the panel's 8-bit F conversion wraps past this
                 joke = self.fun_frame()
                 if joke is not None:
-                    big, small = joke
-                else:
-                    big, small = real_big, real_small
-                    if self.cfg.get("fahrenheit") and big > 123:
-                        big = 123       # the panel's 8-bit F conversion wraps past this
+                    # None in a slot means "leave the real reading there", so a
+                    # frame can be silly in one readout and honest in the other.
+                    if joke[0] is not None:
+                        big = joke[0]
+                    if joke[1] is not None:
+                        small = joke[1]
                 self.screen.send(Stats(cpu_temp=big, cpu_fan=small))
                 self.last = (big, small)
                 self._tick += 1
@@ -300,10 +313,11 @@ class Daemon:
             return None
         pair = frames[(self._tick // 2) % len(frames)]
         try:
-            big, small = int(pair[0]), int(pair[1])
+            big = None if pair[0] is None else int(pair[0])
+            small = None if pair[1] is None else int(pair[1])
         except Exception:  # noqa: BLE001
             return None
-        if big > 127 and not self._warned_clamp:
+        if big is not None and big > 127 and not self._warned_clamp:
             log(f"fun frame big value {big} exceeds the panel's 7-bit field "
                 f"and will display as 127")
             self._warned_clamp = True

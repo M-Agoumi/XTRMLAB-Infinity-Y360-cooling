@@ -10,14 +10,14 @@
   "dll": null,
   "smooth": 3,
   "fun": false,
-  "_comment_fun": "Fun mode alternates second by second: real, joke, real, next joke. Toggle it from the tray icon. NOTE the big readout is a 7-bit field, so anything over 127 displays as 127 -- 420 lands as 127. The fan slot is 16-bit, so 8008 shows fine. Try [42, 420] to see 420 on the glass.",
+  "_comment_fun": "Fun mode alternates second by second: real, joke, real, next joke. Toggle from the tray icon. Each frame is [big, small] and null keeps the REAL reading for that slot -- the defaults only touch the fan, so the temperature is never faked (a number in the big readout is drawn with a degree mark and reads as a believable temperature). The big field is 7-bit: over 127 displays as 127. The fan slot is 16-bit.",
   "fun_frames": [
     [
-      69,
+      null,
       8008
     ],
     [
-      42,
+      null,
       420
     ]
   ]
