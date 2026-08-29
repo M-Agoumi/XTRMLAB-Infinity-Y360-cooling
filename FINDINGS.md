@@ -78,68 +78,50 @@ twelve fields exist because the vendor's larger panels use them.
 An earlier hypothesis — that the big number was the pump's own coolant
 sensor — is **wrong**. Every number on the glass comes from the host.
 
-## The fan slot renders two independent decimal fields
+## The fan slot corrupts large values, and only large ones
 
-Sending 8008 displays **8028**. That looks like a ~0.25% scale, and with only
-that one point plus an early ramp reading, a scale is what it looked like. It
-is not. Seventeen measured pairs show what is really happening:
+Measured across the range (`fan_map.py`, correction off):
 
-| sent | shown | upper | last two |
+| sent | shown | last two digits | upper digits |
 |---:|---:|---|---|
-| 8008 | 8028 | 80 → 80 | 08 → 28 |
-| 7988 | 7908 | 79 → 79 | 88 → 08 |
-| 7990 | 7910 | 79 → 79 | 90 → 10 |
-| 7996 | 7916 | 79 → 79 | 96 → 16 |
+| 4 | 4 | 04 → 04 | unchanged |
+| 42 | 42 | 42 → 42 | unchanged |
+| 99 | 99 | 99 → 99 | unchanged |
+| 100 | 100 | 00 → 00 | unchanged |
+| 420 | 420 | 20 → 20 | unchanged |
+| 999 | 999 | 99 → 99 | unchanged |
+| 1000 | 1000 | 00 → 00 | unchanged |
+| 1020 | 1020 | 20 → 20 | unchanged |
+| 4000 | **4040** | 00 → 40 (+40) | unchanged |
+| 7988 | **7908** | 88 → 08 (+20) | unchanged |
+| 7996 | **7916** | 96 → 16 (+20) | unchanged |
+| 8008 | **8028** | 08 → 28 (+20) | unchanged |
 
-The firmware draws the number as **two independent fields** — everything above
-the last two digits, and the last two digits — and the second field is offset
-by **+20 (mod 100)**. There is no carry: 7996 shows 7916, because 96+20 = 116
-displays as 16 while the 79 stays 79.
+Two things hold everywhere:
 
-So to display `d`, send the same upper digits with the last two rolled back:
+- **the digits above the last two are never touched** — 7996 shows 7916, so
+  96+20 = 116 renders as 16 with no carry into the 79
+- **everything up to at least 1020 displays verbatim**
 
-```
-sent = (d - d % 100) + ((d % 100 - 20) % 100)
-   8008  ->  send 8088
-    420  ->  send  400
-   1439  ->  send 1419
-```
+What varies is the offset applied to the last two digits: `0` below ~1020,
+`+40` at 4000, `+20` around 8000. It is not constant and not monotonic — 4000
+is corrupted *more* than 8008 — so this is magnitude-dependent in a way four
+points cannot pin down. The underlying cause is unknown; it smells like a
+decimal-conversion artefact in the firmware rather than anything we send.
 
-**This model is incomplete and the correction ships DISABLED.** It fits every
-value measured between 7981 and 8008, and fails both known values under 1000:
+Practical consequences:
 
-| sent | shown | +20 model predicts | |
-|---:|---:|---:|---|
-| 4 | 4 | 24 | ✗ (photographed) |
-| 420 | 420 | 440 | ✗ |
-| 1000 | 1001 | 1020 | ✗ |
-| 7988 | 7908 | 7908 | ✓ |
-| 8008 | 8028 | 8028 | ✓ |
+- **real fan RPM is affected.** A reading of 1439 rpm is fine; anything in the
+  thousands may have its last two digits wrong by tens. The error is invisible
+  at a glance, which is why it went unnoticed for so long.
+- **to display an exact number above ~1020, roll the last two digits back by
+  that band's offset.** To show `8008`, send `8088`.
+- **below ~1020 send verbatim.** This is why the generic `fan_low2_offset`
+  correction ships disabled: a single offset applied everywhere fixes 8008 and
+  breaks 420.
 
-So the offset depends on magnitude, or on how many digits the panel is
-drawing — seventeen samples from one narrow band could never distinguish
-those. `fan_map.py` walks values across the whole range to settle it.
-
-`aio_screen.corrected_fan()` implements the offset, driven by
-`fan_low2_offset` in `config.json` (`null` = send verbatim, the default until
-the mapping is known).
-
-Two lessons recorded because both cost real time:
-
-1. The original ramp test (1000→1011 displaying 1000→1011) was read as proof
-   of a verbatim pass-through. It was not: in that range the last-two field
-   happened to be offset by an amount too small to notice against digits read
-   off a photo. A weak measurement was promoted to a documented fact.
-2. Sampling one narrow band and generalising to the whole range. Seventeen
-   readings between 7981 and 8008 produced a confident model that two much
-   older data points — a photograph, and a value that had been quietly
-   working — already contradicted. Range matters more than sample count.
-3. Hunting for the right input by stepping ±1 around a scaled guess is
-   hopeless against this mapping. When the last-two field is wrong, *every*
-   neighbouring value is wrong by the same amount; the value that lands is
-   100 away, not 1. Twenty manual steps produced twenty identical failures,
-   which is itself the clue — a constant error across a swept range means the
-   model is wrong, not the guess.
+Mapping the offset curve properly would need a sweep at every thousand.
+`fan_map.py` is the tool; nobody has needed it enough yet.
 
 ## The 0x80 temperature bit (calibrated)
 

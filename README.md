@@ -141,12 +141,19 @@ two independent decimal fields — everything above the last two digits, and the
 last two digits — and the second one is offset by +20 (mod 100), with no carry
 into the hundreds. So `7996` shows as `7916`.
 
-But that offset does **not** apply below 1000: `4` displays as `4` and `420`
-as `420`. So the correction (`fan_low2_offset` in `config.json`) ships
-**disabled** — enabling it fixes 8008 and breaks 420.
+…but only for large values. Measured across the range, everything up to at
+least **1020 displays verbatim**, while 4000 shows as 4040 and 8008 as 8028.
+The digits above the last two are never touched, and the offset applied to the
+last two varies with magnitude (`+40` at 4000, `+20` near 8000) — so a single
+blanket correction fixes one and breaks the other. `fan_low2_offset` therefore
+ships **disabled**.
 
-`RUN_FAN_MAP.bat` walks ten values across the whole range to establish where
-the behaviour changes.
+In practice: keep numbers under ~1000 and they display exactly. For a specific
+larger number, roll its last two digits back by that band's offset — the fun
+frame sends **8088** to display **8008**.
+
+Real RPM readings in the thousands are affected too: the last two digits can
+be off by tens. `RUN_FAN_MAP.bat` re-measures the behaviour on your unit.
 
 `RUN_FAN_CALIBRATE.bat` is the fuller version — 15 values from 100 to 65535 —
 if you want the actual shape of the mapping rather than one corrected point.
