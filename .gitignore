@@ -13,6 +13,7 @@ test_output.log
 
 # --- Local scratch ----------------------------------------------------
 panel.lock
+daemon.pid
 *.bak
 *.tmp
 *.orig

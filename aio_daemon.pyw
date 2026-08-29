@@ -41,6 +41,7 @@ sys.path.insert(0, HERE)
 
 CONFIG_PATH = os.path.join(HERE, "config.json")
 LOG_PATH = os.path.join(HERE, "aio_daemon.log")
+PID_PATH = os.path.join(HERE, "daemon.pid")
 ICON_PATH = os.path.join(HERE, "icon.ico")
 MAX_LOG_BYTES = 256 * 1024
 
@@ -66,6 +67,30 @@ def log(msg):
                 fh.write(b"...log truncated...\n" + tail)
         with open(LOG_PATH, "a", encoding="utf-8") as fh:
             fh.write(f"{datetime.now():%Y-%m-%d %H:%M:%S}  {msg}\n")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def write_pid_file():
+    """
+    Presence marker for the desktop shortcut.
+
+    panel.lock alone is not enough: it is released whenever the panel handle
+    is dropped (unplugged device, resume from sleep, another writer), so the
+    daemon can be perfectly alive with no lock file. This one exists for the
+    whole process lifetime.
+    """
+    try:
+        with open(PID_PATH, "w", encoding="utf-8") as fh:
+            fh.write(f'{{"pid": {os.getpid()}, "started": {time.time():.0f}}}\n')
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def clear_pid_file():
+    try:
+        if os.path.exists(PID_PATH):
+            os.remove(PID_PATH)
     except Exception:  # noqa: BLE001
         pass
 
@@ -292,10 +317,14 @@ def main():
         f"{bool(ctypes.windll.shell32.IsUserAnAdmin())})")
     cfg = load_config()
     daemon = Daemon(cfg)
+    write_pid_file()
     try:
         run_tray(daemon)
     except Exception as e:  # noqa: BLE001
         log(f"fatal: {e}\n{traceback.format_exc()}")
+    finally:
+        clear_pid_file()
+        log("exited")
 
 
 if __name__ == "__main__":
