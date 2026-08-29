@@ -15,7 +15,7 @@ Fun mode (toggle it from the tray icon) alternates second by second:
     1s  real stats
     2s  fun_frames[0]      69 / 8008
     3s  real stats
-    4s  fun_frames[1]      420 / 8008
+    4s  fun_frames[1]      42 / 420
     ... and loops
 
 Note the big readout is a 7-bit field, so it maxes out at 127: a big value of
@@ -33,7 +33,7 @@ on first run:
       "hz":   1.0,
       "smooth": 3,            median of the last N samples; 1 = raw
       "fun":  false,          alternate real readings with joke frames
-      "fun_frames": [[69, 8008], [420, 8008]],   [big, small] pairs
+      "fun_frames": [[69, 8008], [42, 420]],   [big, small] pairs
       "fahrenheit": false,
       "dll":  null            null = the copy bundled with PC Monitor
     }
@@ -72,7 +72,7 @@ DEFAULTS = {
     # Fun mode: alternate real readings with fixed joke frames, one second
     # each -- real, joke, real, next joke, looping through fun_frames.
     "fun": False,
-    "fun_frames": [[69, 8008], [420, 8008]],
+    "fun_frames": [[69, 8008], [42, 420]],
 }
 
 
