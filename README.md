@@ -289,6 +289,7 @@ tools that worked it out are included:
 | `demo_stats.py` | live demo; `--big`/`--small` choose each readout |
 | `start_panel.vbs` | what the desktop shortcut runs |
 | `aio_screen.spec` / `BUILD_EXE.bat` | build the standalone .exe |
+| `PUBLISH_RELEASE.bat` | push and create the GitHub release with the .exe |
 | `doctor.py` | environment check: what is missing and how to fix it |
 | `install.ps1` | packages + downloads the sensor DLL |
 
