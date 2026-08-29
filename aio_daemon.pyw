@@ -1,0 +1,241 @@
+"""
+aio_daemon.pyw -- background service for the AIO pump-cap display.
+
+Runs with no console window (.pyw), posts CPU temperature and fan RPM to the
+panel once a second, and sits in the system tray with a tooltip showing the
+live values. Right-click the tray icon for status or to quit.
+
+Why it needs administrator: CPU temperature and fan tachometers live behind
+the SuperIO chip and MSR registers, which need a kernel driver.
+LibreHardwareMonitor provides one. Without elevation the library still loads
+but reports nothing, so this logs a clear warning rather than showing zeros.
+
+Configuration lives in config.json next to this file, written with defaults
+on first run:
+
+    {
+      "big":  "cpu_temp",     what the big readout shows
+      "small":"cpu_fan",      what the small readout shows
+      "temp": "CPU Package",  sensor name or "#index"
+      "fan":  "Fan #1",       sensor name or "#index"
+      "hz":   1.0,
+      "fahrenheit": false,
+      "dll":  null            null = the copy bundled with PC Monitor
+    }
+
+Install it to start at logon with INSTALL_STARTUP.bat.
+"""
+
+import ctypes
+import json
+import os
+import sys
+import threading
+import time
+import traceback
+from datetime import datetime
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+
+CONFIG_PATH = os.path.join(HERE, "config.json")
+LOG_PATH = os.path.join(HERE, "aio_daemon.log")
+ICON_PATH = os.path.join(HERE, "icon.ico")
+MAX_LOG_BYTES = 256 * 1024
+
+DEFAULTS = {
+    "big": "cpu_temp",
+    "small": "cpu_fan",
+    "temp": "CPU Package",
+    "fan": "Fan #1",
+    "hz": 1.0,
+    "fahrenheit": False,
+    "dll": None,
+}
+
+
+def log(msg):
+    try:
+        if os.path.exists(LOG_PATH) and os.path.getsize(LOG_PATH) > MAX_LOG_BYTES:
+            with open(LOG_PATH, "rb") as fh:
+                fh.seek(-MAX_LOG_BYTES // 2, os.SEEK_END)
+                tail = fh.read()
+            with open(LOG_PATH, "wb") as fh:
+                fh.write(b"...log truncated...\n" + tail)
+        with open(LOG_PATH, "a", encoding="utf-8") as fh:
+            fh.write(f"{datetime.now():%Y-%m-%d %H:%M:%S}  {msg}\n")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def load_config():
+    cfg = dict(DEFAULTS)
+    try:
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH, encoding="utf-8") as fh:
+                cfg.update(json.load(fh))
+        else:
+            with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
+                json.dump(cfg, fh, indent=2)
+            log(f"wrote default config to {CONFIG_PATH}")
+    except Exception as e:  # noqa: BLE001
+        log(f"config error, using defaults: {e}")
+    return cfg
+
+
+def single_instance():
+    """A second copy would fight the first for the HID handle."""
+    handle = ctypes.windll.kernel32.CreateMutexW(None, False, "Global\\aio_screen_daemon")
+    return handle and ctypes.windll.kernel32.GetLastError() != 183   # ERROR_ALREADY_EXISTS
+
+
+class Daemon:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.stop = threading.Event()
+        self.status = "starting"
+        self.last = (0, 0)
+        self.screen = None
+        self.sensors = None
+
+    # -- data ---------------------------------------------------------
+    def _open_sensors(self):
+        from sensors import LhmSensors, DEFAULT_DLL, is_admin
+        if not is_admin():
+            log("WARNING: not elevated -- CPU temp and fan RPM will read 0. "
+                "Install with INSTALL_STARTUP.bat so the task runs with highest privileges.")
+        self.sensors = LhmSensors(self.cfg.get("dll") or DEFAULT_DLL)
+        t = self.sensors.pick_temp(self.cfg.get("temp"))
+        f = self.sensors.pick_fan(self.cfg.get("fan"))
+        log(f"temp sensor = {t[1] if t else None!r}, fan sensor = {f[1] if f else None!r}")
+
+    def _open_panel(self):
+        from aio_screen import AioScreen
+        self.screen = AioScreen(fahrenheit=self.cfg.get("fahrenheit", False)).open()
+        log(f"panel open, output report {self.screen.output_len} bytes")
+
+    def read(self):
+        temp = self.sensors.cpu_temp(self.cfg.get("temp"))
+        fan = self.sensors.fan_rpm(self.cfg.get("fan"))
+        return (int(round(temp)) if temp is not None else 0,
+                int(round(fan)) if fan is not None else 0)
+
+    # -- loop ---------------------------------------------------------
+    def run(self):
+        from aio_screen import Stats
+        period = 1.0 / max(0.1, float(self.cfg.get("hz", 1.0)))
+        backoff = 1.0
+        while not self.stop.is_set():
+            try:
+                if self.sensors is None:
+                    self._open_sensors()
+                if self.screen is None:
+                    self._open_panel()
+
+                big, small = self.read()
+                if self.cfg.get("fahrenheit") and big > 123:
+                    big = 123           # the panel's 8-bit F conversion wraps past this
+                self.screen.send(Stats(cpu_temp=big, cpu_fan=small))
+                self.last = (big, small)
+                self.status = "running"
+                backoff = 1.0
+                self.stop.wait(period)
+            except Exception as e:  # noqa: BLE001
+                # Unplugged panel, sleep/resume, driver hiccup: drop everything
+                # and rebuild on the next pass rather than dying silently.
+                self.status = f"retrying: {e}"
+                log(f"error: {e}\n{traceback.format_exc()}")
+                try:
+                    if self.screen:
+                        self.screen.close()
+                except Exception:  # noqa: BLE001
+                    pass
+                self.screen = None
+                self.stop.wait(backoff)
+                backoff = min(30.0, backoff * 2)
+
+        try:
+            if self.screen:
+                self.screen.close()
+            if self.sensors:
+                self.sensors.close()
+        except Exception:  # noqa: BLE001
+            pass
+        log("stopped")
+
+    def tooltip(self):
+        big, small = self.last
+        unit = "F" if self.cfg.get("fahrenheit") else "C"
+        if self.status.startswith("retrying"):
+            return f"AIO screen - {self.status}"
+        return f"AIO screen\n{big} {unit}   {small} rpm"
+
+
+def run_tray(daemon):
+    """Tray icon if pystray is available; otherwise just run headless."""
+    try:
+        import pystray
+        from PIL import Image
+    except ImportError:
+        log("pystray/Pillow not installed -- running headless (no tray icon). "
+            "pip install pystray pillow")
+        daemon.run()
+        return
+
+    image = Image.open(ICON_PATH) if os.path.exists(ICON_PATH) else \
+        Image.new("RGB", (32, 32), (69, 196, 255))
+
+    worker = threading.Thread(target=daemon.run, daemon=True)
+    worker.start()
+
+    def on_quit(icon, _item):
+        daemon.stop.set()
+        worker.join(timeout=3)
+        icon.stop()
+
+    def on_open_log(_icon, _item):
+        os.startfile(LOG_PATH) if os.path.exists(LOG_PATH) else None
+
+    def on_open_config(_icon, _item):
+        os.startfile(CONFIG_PATH)
+
+    icon = pystray.Icon(
+        "aio_screen", image, "AIO screen",
+        menu=pystray.Menu(
+            pystray.MenuItem(lambda _i: daemon.tooltip().replace("\n", "  "), None, enabled=False),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Edit config.json", on_open_config),
+            pystray.MenuItem("Open log", on_open_log),
+            pystray.MenuItem("Quit", on_quit),
+        ),
+    )
+
+    def refresh():
+        while not daemon.stop.is_set():
+            try:
+                icon.title = daemon.tooltip()
+            except Exception:  # noqa: BLE001
+                pass
+            time.sleep(2)
+
+    threading.Thread(target=refresh, daemon=True).start()
+    icon.run()
+
+
+def main():
+    if not single_instance():
+        log("another copy is already running -- exiting")
+        return
+    log("=" * 60)
+    log(f"starting (python {sys.version.split()[0]}, elevated="
+        f"{bool(ctypes.windll.shell32.IsUserAnAdmin())})")
+    cfg = load_config()
+    daemon = Daemon(cfg)
+    try:
+        run_tray(daemon)
+    except Exception as e:  # noqa: BLE001
+        log(f"fatal: {e}\n{traceback.format_exc()}")
+
+
+if __name__ == "__main__":
+    main()

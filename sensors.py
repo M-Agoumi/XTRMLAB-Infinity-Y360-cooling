@@ -1,0 +1,240 @@
+"""
+sensors.py -- real CPU temperature and fan RPM, via LibreHardwareMonitor.
+
+Windows gives an ordinary process no way to read CPU temperature or a
+motherboard fan tacho: both live behind the SuperIO chip / MSR registers,
+which need a kernel driver. That is exactly why the vendor app ships
+PC_Monitor.sys. LibreHardwareMonitor solves the same problem with its own
+signed ring0 driver, and its library is already sitting on this machine at
+
+    C:\\Program Files (x86)\\PC Monitor\\LibreHardwareMonitorLib.dll
+
+(open source, MPL-2.0 -- the vendor bundles it for the same reason).
+
+So: load that assembly through pythonnet and read the sensors directly.
+
+    REQUIRES ADMINISTRATOR. Without it the library loads fine but silently
+    reports no temperatures, because its driver cannot start.
+
+    pip install pythonnet
+
+If you would rather not run elevated, run the LibreHardwareMonitor GUI (it
+elevates itself), enable its web server, and use demo_stats.py --lhm
+http://localhost:8085/data.json instead -- same numbers, no admin here.
+"""
+
+from __future__ import annotations
+
+import ctypes
+import os
+
+DEFAULT_DLL = r"C:\Program Files (x86)\PC Monitor\LibreHardwareMonitorLib.dll"
+
+
+class SensorError(RuntimeError):
+    pass
+
+
+def is_admin() -> bool:
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+class LhmSensors:
+    """Thin wrapper over LibreHardwareMonitor's Computer object."""
+
+    def __init__(self, dll_path: str = DEFAULT_DLL):
+        if not os.path.exists(dll_path):
+            raise SensorError(f"LibreHardwareMonitorLib.dll not found at:\n    {dll_path}\n"
+                              f"Pass --dll with the right path.")
+        try:
+            # pythonnet 3 defaults to .NET Core; this DLL is net472, so ask
+            # for the .NET Framework runtime explicitly before clr is imported.
+            try:
+                from pythonnet import load as _load
+                _load("netfx")
+            except Exception:  # noqa: BLE001
+                pass                     # pythonnet 2.x, or already loaded
+            import clr
+        except ImportError as e:
+            raise SensorError(f"pythonnet is not installed ({e}). pip install pythonnet") from e
+
+        clr.AddReference(dll_path)
+        from LibreHardwareMonitor.Hardware import Computer  # noqa: PLC0415
+
+        self._computer = Computer()
+        self._computer.IsCpuEnabled = True
+        self._computer.IsMotherboardEnabled = True      # SuperIO: fan RPMs
+        self._computer.IsGpuEnabled = True
+        self._computer.IsMemoryEnabled = True
+        self._computer.IsStorageEnabled = False
+        self._computer.Open()
+        self._admin = is_admin()
+
+    # -- internals ----------------------------------------------------
+    def _refresh(self):
+        for hw in self._computer.Hardware:
+            hw.Update()
+            for sub in hw.SubHardware:       # SuperIO hangs off the motherboard
+                sub.Update()
+
+    def _walk(self):
+        for hw in self._computer.Hardware:
+            for s in hw.Sensors:
+                yield hw, s
+            for sub in hw.SubHardware:
+                for s in sub.Sensors:
+                    yield sub, s
+
+    # -- public -------------------------------------------------------
+    def snapshot(self) -> dict:
+        """{(hardware, sensor_type, name): value} for everything readable."""
+        self._refresh()
+        out = {}
+        for hw, s in self._walk():
+            if s.Value is not None:
+                out[(str(hw.Name), str(s.SensorType), str(s.Name))] = float(s.Value)
+        return out
+
+    def list_sensors(self):
+        rows = []
+        for (hw, kind, name), value in sorted(self.snapshot().items()):
+            rows.append((hw, kind, name, value))
+        return rows
+
+    def fans(self):
+        """[(hardware, name, rpm)] for every fan tacho, in discovery order."""
+        self._refresh()
+        out = []
+        for hw, sen in self._walk():
+            if str(sen.SensorType) == "Fan" and sen.Value is not None:
+                out.append((str(hw.Name), str(sen.Name), float(sen.Value)))
+        return out
+
+    def temps(self):
+        """[(hardware, name, celsius)] for every temperature sensor."""
+        self._refresh()
+        out = []
+        for hw, sen in self._walk():
+            if str(sen.SensorType) == "Temperature" and sen.Value is not None:
+                out.append((str(hw.Name), str(sen.Name), float(sen.Value)))
+        return out
+
+    @staticmethod
+    def _pick(rows, prefer):
+        """
+        Choose one (hardware, name, value) row.
+
+        `prefer` may be an exact-ish sensor name, a substring, or "#3"/"3" to
+        take the third row as listed. Matching goes strictest-first so that
+        asking for "CPU Fan" cannot silently land on "CPU OPT Fan" -- which is
+        exactly the trap on an AIO build, where CPU_OPT usually drives the
+        pump and spins far faster than the radiator fans.
+        """
+        if not rows:
+            return None
+        if prefer:
+            want = str(prefer).strip().lower()
+            idx = want.lstrip("#")
+            if idx.isdigit():
+                i = int(idx)
+                if 0 <= i < len(rows):
+                    return rows[i]
+            for row in rows:                              # exact
+                if row[1].lower() == want:
+                    return row
+            for row in rows:                              # prefix
+                if row[1].lower().startswith(want):
+                    return row
+            for row in rows:                              # substring
+                if want in row[1].lower():
+                    return row
+            for row in rows:                              # hardware name
+                if want in row[0].lower():
+                    return row
+        return None
+
+    def pick_temp(self, prefer=None):
+        rows = self.temps()
+        hit = self._pick(rows, prefer)
+        if hit:
+            return hit
+        # No preference: CPU package first, else the hottest CPU core.
+        for row in rows:
+            n = row[1].lower()
+            if "package" in n or "tctl" in n:
+                return row
+        cores = [r for r in rows if r[1].lower().startswith("core")
+                 or "cores" in r[1].lower()]
+        if cores:
+            return max(cores, key=lambda r: r[2])
+        return rows[0] if rows else None
+
+    def pick_fan(self, prefer=None):
+        rows = self.fans()
+        hit = self._pick(rows, prefer)
+        if hit:
+            return hit
+        # No preference: the FIRST fan that is actually turning. SuperIO chips
+        # enumerate in header order and #1 is the CPU header on every board
+        # seen so far, so this beats both "fastest" (which picks the pump on
+        # CPU_OPT) and "slowest" (which picks whichever case fan idles lowest).
+        spinning = [r for r in rows if r[2] > 0]
+        if spinning:
+            return spinning[0]
+        return rows[0] if rows else None
+
+    def cpu_temp(self, prefer=None):
+        hit = self.pick_temp(prefer)
+        return hit[2] if hit else None
+
+    def fan_rpm(self, prefer=None):
+        hit = self.pick_fan(prefer)
+        return hit[2] if hit else None
+
+    def close(self):
+        try:
+            self._computer.Close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def main():
+    import argparse
+    ap = argparse.ArgumentParser(description="list every sensor LibreHardwareMonitor can see")
+    ap.add_argument("--dll", default=DEFAULT_DLL)
+    args = ap.parse_args()
+
+    if not is_admin():
+        print("!! NOT running as administrator -- temperatures and fan RPMs will be missing.\n")
+    lhm = LhmSensors(args.dll)
+    try:
+        rows = lhm.list_sensors()
+        print(f"{len(rows)} readable sensors\n")
+        for hw, kind, name, value in rows:
+            flag = ""
+            if kind == "Fan":
+                flag = "   <-- fan"
+            elif kind == "Temperature" and ("package" in name.lower() or "tctl" in name.lower()):
+                flag = "   <-- CPU package temp"
+            print(f"  {hw:<28} {kind:<12} {name:<28} {value:>10.1f}{flag}")
+        print("\n--- fans, as the demo lists them (index | name | rpm) ---")
+        for i, (hw, name, value) in enumerate(lhm.fans()):
+            print(f"  [{i}]  {name:<24} {value:>8.0f} rpm    ({hw})")
+        print("\n--- temperatures ---")
+        for i, (hw, name, value) in enumerate(lhm.temps()):
+            print(f"  [{i}]  {name:<24} {value:>8.1f} C      ({hw})")
+        t, f = lhm.pick_temp(), lhm.pick_fan()
+        print(f"\ndefault temp choice : {t[1]!r} = {t[2]:.1f} C" if t else "\nno temperature found")
+        print(f"default fan choice  : {f[1]!r} = {f[2]:.0f} rpm" if f else "no fan found")
+        print("\nCompare these against your motherboard tool, then pass the one you want:")
+        print('   python demo_stats.py --admin-sensors --big cpu_temp --small cpu_fan \\')
+        print('          --temp "CPU Package" --fan "#0"')
+    finally:
+        lhm.close()
+
+
+if __name__ == "__main__":
+    main()

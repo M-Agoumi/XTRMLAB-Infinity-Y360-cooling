@@ -36,6 +36,46 @@ pip install psutil     # only for demo_stats.py; HID access needs nothing
 Close the vendor "PC Monitor" app first — the `RUN_*.bat` wrappers do it for
 you.
 
+## Run it in the background (what you probably want)
+
+```
+INSTALL_STARTUP.bat      installs it to start at logon, elevated
+UNINSTALL_STARTUP.bat    removes it
+START_NOW.bat            run it once without installing
+```
+
+`aio_daemon.pyw` posts CPU temperature and fan RPM at 1 Hz with no console
+window, and sits in the system tray (hover for live values, right-click for
+config/log/quit). Settings live in `config.json`; problems go to
+`aio_daemon.log`.
+
+**Why a scheduled task rather than a Startup-folder shortcut:** reading CPU
+temperature needs administrator rights, and a shortcut would trigger a UAC
+prompt on every single boot. A Task Scheduler entry with "run with highest
+privileges" holds the elevation itself, so it starts silently. This is the
+same mechanism the vendor app uses.
+
+### Picking the right sensors
+
+Boards expose several plausible-looking candidates and choosing wrong is
+silent, so `config.json` names them explicitly. On this machine
+(Gigabyte Z790 D AX, ITE IT8689E, i7-14700KF):
+
+| config | value | why |
+|---|---|---|
+| `fan` | `Fan #1` | the CPU header. `Fan #5` is CPU_OPT — **the pump**, ~2500 rpm; `Fan #4` is System 3 |
+| `temp` | `CPU Package` | on-die DTS, what HWMonitor calls Package |
+
+Two honest caveats about the temperature. `CPU Package` is **spiky** — it is
+the hottest thing the die reports and moves tens of degrees between samples.
+And it will not agree with Gigabyte Control Center: GCC shows the
+motherboard's own socket probe (one of the ITE `Temperature #N` sensors),
+which is a different physical sensor, slower and cooler by design. Neither is
+wrong. For a calmer readout use `"temp": "Core Average"`.
+
+`RUN_SENSORS.bat` lists every sensor with an index so you can match them
+against your board's own tool.
+
 ## Try it
 
 ```
@@ -83,6 +123,7 @@ python demo_stats.py --lhm http://localhost:8085/data.json --big cpu_temp
 Kept because they are what cracked this, and they re-derive it quickly if a
 future firmware or a different panel behaves differently:
 
+- `sensors.py` — run it directly (elevated) to list every sensor with values
 - `list_hid.py` — every HID interface, panel flagged, with report lengths
 - `identify.py` — sets each field to its own index, so the panel maps itself
 - `probe_display.py` — counting ramps one field at a time; a readout that

@@ -1,0 +1,11 @@
+{
+  "big": "cpu_temp",
+  "small": "cpu_fan",
+  "_comment_temp": "'CPU Package' is the on-die DTS - the standard CPU temperature, and what HWMonitor calls Package. It is spiky. 'Core Average' is smoother; the ITE 'Temperature #N' sensors are board probes and are what Gigabyte Control Center shows.",
+  "temp": "CPU Package",
+  "_comment_fan": "Fan #1 = CPU header (GCC 'CPU'), #2/#3 = System 1 and 2 (empty), #4 = System 3, #5 = CPU_OPT which on this build is the PUMP.",
+  "fan": "Fan #1",
+  "hz": 1.0,
+  "fahrenheit": false,
+  "dll": null
+}

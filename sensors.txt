@@ -1,0 +1,180 @@
+175 readable sensors
+
+  Generic Memory               Data         Memory Available                   13.0
+  Generic Memory               Data         Memory Used                        18.8
+  Generic Memory               Data         Virtual Memory Available           12.9
+  Generic Memory               Data         Virtual Memory Used                34.9
+  Generic Memory               Load         Memory                             59.1
+  Generic Memory               Load         Virtual Memory                     72.9
+  ITE IT8689E                  Fan          Fan #1                           1439.2   <-- fan
+  ITE IT8689E                  Fan          Fan #2                              0.0   <-- fan
+  ITE IT8689E                  Fan          Fan #3                              0.0   <-- fan
+  ITE IT8689E                  Fan          Fan #4                           1397.5   <-- fan
+  ITE IT8689E                  Fan          Fan #5                           2556.8   <-- fan
+  ITE IT8689E                  Temperature  Temperature #1                     31.0
+  ITE IT8689E                  Temperature  Temperature #2                     42.0
+  ITE IT8689E                  Temperature  Temperature #3                     56.0
+  ITE IT8689E                  Temperature  Temperature #4                     36.0
+  ITE IT8689E                  Temperature  Temperature #5                     48.0
+  ITE IT8689E                  Temperature  Temperature #6                     34.0
+  ITE IT8689E                  Voltage      +3V Standby                         3.3
+  ITE IT8689E                  Voltage      CMOS Battery                        3.0
+  ITE IT8689E                  Voltage      Voltage #1                          1.4
+  ITE IT8689E                  Voltage      Voltage #2                          2.0
+  ITE IT8689E                  Voltage      Voltage #3                          2.0
+  ITE IT8689E                  Voltage      Voltage #4                          2.0
+  ITE IT8689E                  Voltage      Voltage #5                          0.0
+  ITE IT8689E                  Voltage      Voltage #6                          1.8
+  ITE IT8689E                  Voltage      Voltage #7                          2.0
+  Intel Core i7-14700KF        Clock        Bus Speed                         100.5
+  Intel Core i7-14700KF        Clock        CPU Core #1                      5528.5
+  Intel Core i7-14700KF        Clock        CPU Core #10                     4322.3
+  Intel Core i7-14700KF        Clock        CPU Core #11                     4322.3
+  Intel Core i7-14700KF        Clock        CPU Core #12                     4322.3
+  Intel Core i7-14700KF        Clock        CPU Core #13                     4322.3
+  Intel Core i7-14700KF        Clock        CPU Core #14                     4322.3
+  Intel Core i7-14700KF        Clock        CPU Core #15                     4322.3
+  Intel Core i7-14700KF        Clock        CPU Core #16                     4322.3
+  Intel Core i7-14700KF        Clock        CPU Core #17                     4322.3
+  Intel Core i7-14700KF        Clock        CPU Core #18                     4322.3
+  Intel Core i7-14700KF        Clock        CPU Core #19                     4322.3
+  Intel Core i7-14700KF        Clock        CPU Core #2                      5528.5
+  Intel Core i7-14700KF        Clock        CPU Core #20                     4322.3
+  Intel Core i7-14700KF        Clock        CPU Core #3                      5528.5
+  Intel Core i7-14700KF        Clock        CPU Core #4                      5528.5
+  Intel Core i7-14700KF        Clock        CPU Core #5                      5528.5
+  Intel Core i7-14700KF        Clock        CPU Core #6                      5528.5
+  Intel Core i7-14700KF        Clock        CPU Core #7                      5528.5
+  Intel Core i7-14700KF        Clock        CPU Core #8                      5528.5
+  Intel Core i7-14700KF        Clock        CPU Core #9                      4322.3
+  Intel Core i7-14700KF        Load         CPU Core #1 Thread #1              33.1
+  Intel Core i7-14700KF        Load         CPU Core #1 Thread #2               0.0
+  Intel Core i7-14700KF        Load         CPU Core #10                       10.2
+  Intel Core i7-14700KF        Load         CPU Core #11                        8.6
+  Intel Core i7-14700KF        Load         CPU Core #12                        3.6
+  Intel Core i7-14700KF        Load         CPU Core #13                        4.9
+  Intel Core i7-14700KF        Load         CPU Core #14                        1.7
+  Intel Core i7-14700KF        Load         CPU Core #15                       24.5
+  Intel Core i7-14700KF        Load         CPU Core #16                       22.0
+  Intel Core i7-14700KF        Load         CPU Core #17                       45.0
+  Intel Core i7-14700KF        Load         CPU Core #18                       42.4
+  Intel Core i7-14700KF        Load         CPU Core #19                       34.6
+  Intel Core i7-14700KF        Load         CPU Core #2 Thread #1              16.5
+  Intel Core i7-14700KF        Load         CPU Core #2 Thread #2               0.0
+  Intel Core i7-14700KF        Load         CPU Core #20                        5.6
+  Intel Core i7-14700KF        Load         CPU Core #3 Thread #1              11.8
+  Intel Core i7-14700KF        Load         CPU Core #3 Thread #2               0.0
+  Intel Core i7-14700KF        Load         CPU Core #4 Thread #1               8.1
+  Intel Core i7-14700KF        Load         CPU Core #4 Thread #2               0.0
+  Intel Core i7-14700KF        Load         CPU Core #5 Thread #1              36.8
+  Intel Core i7-14700KF        Load         CPU Core #5 Thread #2               0.0
+  Intel Core i7-14700KF        Load         CPU Core #6 Thread #1              48.4
+  Intel Core i7-14700KF        Load         CPU Core #6 Thread #2               0.0
+  Intel Core i7-14700KF        Load         CPU Core #7 Thread #1               5.6
+  Intel Core i7-14700KF        Load         CPU Core #7 Thread #2               0.0
+  Intel Core i7-14700KF        Load         CPU Core #8 Thread #1               4.3
+  Intel Core i7-14700KF        Load         CPU Core #8 Thread #2               0.0
+  Intel Core i7-14700KF        Load         CPU Core #9                        15.5
+  Intel Core i7-14700KF        Load         CPU Core Max                       48.4
+  Intel Core i7-14700KF        Load         CPU Total                          12.6
+  Intel Core i7-14700KF        Power        CPU Cores                          84.6
+  Intel Core i7-14700KF        Power        CPU Memory                          0.0
+  Intel Core i7-14700KF        Power        CPU Package                        86.3
+  Intel Core i7-14700KF        Power        CPU Platform                        0.0
+  Intel Core i7-14700KF        Temperature  CPU Core #1                        46.0
+  Intel Core i7-14700KF        Temperature  CPU Core #1 Distance to TjMax       54.0
+  Intel Core i7-14700KF        Temperature  CPU Core #10                       44.0
+  Intel Core i7-14700KF        Temperature  CPU Core #10 Distance to TjMax       56.0
+  Intel Core i7-14700KF        Temperature  CPU Core #11                       44.0
+  Intel Core i7-14700KF        Temperature  CPU Core #11 Distance to TjMax       56.0
+  Intel Core i7-14700KF        Temperature  CPU Core #12                       44.0
+  Intel Core i7-14700KF        Temperature  CPU Core #12 Distance to TjMax       56.0
+  Intel Core i7-14700KF        Temperature  CPU Core #13                       43.0
+  Intel Core i7-14700KF        Temperature  CPU Core #13 Distance to TjMax       57.0
+  Intel Core i7-14700KF        Temperature  CPU Core #14                       43.0
+  Intel Core i7-14700KF        Temperature  CPU Core #14 Distance to TjMax       57.0
+  Intel Core i7-14700KF        Temperature  CPU Core #15                       43.0
+  Intel Core i7-14700KF        Temperature  CPU Core #15 Distance to TjMax       57.0
+  Intel Core i7-14700KF        Temperature  CPU Core #16                       43.0
+  Intel Core i7-14700KF        Temperature  CPU Core #16 Distance to TjMax       57.0
+  Intel Core i7-14700KF        Temperature  CPU Core #17                       43.0
+  Intel Core i7-14700KF        Temperature  CPU Core #17 Distance to TjMax       57.0
+  Intel Core i7-14700KF        Temperature  CPU Core #18                       43.0
+  Intel Core i7-14700KF        Temperature  CPU Core #18 Distance to TjMax       57.0
+  Intel Core i7-14700KF        Temperature  CPU Core #19                       43.0
+  Intel Core i7-14700KF        Temperature  CPU Core #19 Distance to TjMax       57.0
+  Intel Core i7-14700KF        Temperature  CPU Core #2                        47.0
+  Intel Core i7-14700KF        Temperature  CPU Core #2 Distance to TjMax       53.0
+  Intel Core i7-14700KF        Temperature  CPU Core #20                       43.0
+  Intel Core i7-14700KF        Temperature  CPU Core #20 Distance to TjMax       57.0
+  Intel Core i7-14700KF        Temperature  CPU Core #3                        50.0
+  Intel Core i7-14700KF        Temperature  CPU Core #3 Distance to TjMax       50.0
+  Intel Core i7-14700KF        Temperature  CPU Core #4                        47.0
+  Intel Core i7-14700KF        Temperature  CPU Core #4 Distance to TjMax       53.0
+  Intel Core i7-14700KF        Temperature  CPU Core #5                        62.0
+  Intel Core i7-14700KF        Temperature  CPU Core #5 Distance to TjMax       38.0
+  Intel Core i7-14700KF        Temperature  CPU Core #6                        50.0
+  Intel Core i7-14700KF        Temperature  CPU Core #6 Distance to TjMax       50.0
+  Intel Core i7-14700KF        Temperature  CPU Core #7                        46.0
+  Intel Core i7-14700KF        Temperature  CPU Core #7 Distance to TjMax       54.0
+  Intel Core i7-14700KF        Temperature  CPU Core #8                        42.0
+  Intel Core i7-14700KF        Temperature  CPU Core #8 Distance to TjMax       58.0
+  Intel Core i7-14700KF        Temperature  CPU Core #9                        44.0
+  Intel Core i7-14700KF        Temperature  CPU Core #9 Distance to TjMax       56.0
+  Intel Core i7-14700KF        Temperature  CPU Package                        62.0   <-- CPU package temp
+  Intel Core i7-14700KF        Temperature  Core Average                       45.5
+  Intel Core i7-14700KF        Temperature  Core Max                           62.0
+  Intel Core i7-14700KF        Voltage      CPU Core                            1.5
+  Intel Core i7-14700KF        Voltage      CPU Core #1                         1.5
+  Intel Core i7-14700KF        Voltage      CPU Core #10                        1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #11                        1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #12                        1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #13                        1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #14                        1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #15                        1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #16                        1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #17                        1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #18                        1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #19                        1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #2                         1.5
+  Intel Core i7-14700KF        Voltage      CPU Core #20                        1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #3                         1.5
+  Intel Core i7-14700KF        Voltage      CPU Core #4                         1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #5                         1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #6                         1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #7                         1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #8                         1.4
+  Intel Core i7-14700KF        Voltage      CPU Core #9                         1.4
+  NVIDIA GeForce RTX 5070      Clock        GPU Core                         1065.0
+  NVIDIA GeForce RTX 5070      Clock        GPU Memory                      14001.0
+  NVIDIA GeForce RTX 5070      Control      GPU Fan                             0.0
+  NVIDIA GeForce RTX 5070      Fan          GPU Fan                             0.0   <-- fan
+  NVIDIA GeForce RTX 5070      Load         D3D 3D                              2.3
+  NVIDIA GeForce RTX 5070      Load         D3D Copy                            0.0
+  NVIDIA GeForce RTX 5070      Load         D3D JPEG_Decode_0                   0.0
+  NVIDIA GeForce RTX 5070      Load         D3D OFA_0                           0.0
+  NVIDIA GeForce RTX 5070      Load         D3D Security                        0.0
+  NVIDIA GeForce RTX 5070      Load         D3D VR                              0.0
+  NVIDIA GeForce RTX 5070      Load         D3D Video Decode                    1.4
+  NVIDIA GeForce RTX 5070      Load         D3D Video Encode                    0.0
+  NVIDIA GeForce RTX 5070      Load         GPU Board Power                    16.4
+  NVIDIA GeForce RTX 5070      Load         GPU Bus                             4.0
+  NVIDIA GeForce RTX 5070      Load         GPU Core                            3.0
+  NVIDIA GeForce RTX 5070      Load         GPU Memory                         32.0
+  NVIDIA GeForce RTX 5070      Load         GPU Memory Controller               2.0
+  NVIDIA GeForce RTX 5070      Load         GPU Power                          12.1
+  NVIDIA GeForce RTX 5070      Load         GPU Video Engine                    1.0
+  NVIDIA GeForce RTX 5070      Power        GPU Package                        32.1
+  NVIDIA GeForce RTX 5070      SmallData    D3D Dedicated Memory Used        3651.2
+  NVIDIA GeForce RTX 5070      SmallData    D3D Shared Memory Used            260.8
+  NVIDIA GeForce RTX 5070      SmallData    GPU Memory Free                  8316.0
+  NVIDIA GeForce RTX 5070      SmallData    GPU Memory Total                12227.0
+  NVIDIA GeForce RTX 5070      SmallData    GPU Memory Used                  3910.0
+  NVIDIA GeForce RTX 5070      Temperature  GPU Core                           44.0
+  NVIDIA GeForce RTX 5070      Temperature  GPU Hot Spot                       44.7
+  NVIDIA GeForce RTX 5070      Temperature  GPU Memory Junction               255.0
+  NVIDIA GeForce RTX 5070      Throughput   GPU PCIe Rx                   3322880.0
+  NVIDIA GeForce RTX 5070      Throughput   GPU PCIe Tx                   7482368.0
+
+chosen CPU temp : 63.0
+chosen fan RPM  : 2537.593994140625

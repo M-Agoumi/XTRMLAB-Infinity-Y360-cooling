@@ -45,7 +45,8 @@ METRICS = {
     "gpu_power":  "GPU power draw, W",
     "cpu_load":   "CPU utilisation, %",
     "cpu_clock":  "CPU clock, MHz",
-    "cpu_temp":   "CPU temperature, C -- needs --lhm",
+    "cpu_temp":   "CPU temperature, C -- needs --admin-sensors or --lhm",
+    "cpu_fan":    "CPU/case fan, RPM -- needs --admin-sensors or --lhm",
     "cpu_power":  "CPU package power, W -- needs --lhm",
     "mem_load":   "memory in use, %",
     "mem_total":  "total RAM, MB",
@@ -102,7 +103,7 @@ def lhm_stats(url):
     return found
 
 
-def collect(lhm_url=None):
+def collect(lhm_url=None, lhm_lib=None, fan_prefer=None, temp_prefer=None):
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage("C:\\" if sys.platform == "win32" else "/")
     freq = psutil.cpu_freq()
@@ -110,7 +111,7 @@ def collect(lhm_url=None):
     v = {
         "cpu_load": int(psutil.cpu_percent()),
         "cpu_clock": int(freq.current) if freq else 0,
-        "cpu_temp": 0, "cpu_power": 0,
+        "cpu_temp": 0, "cpu_fan": 0, "cpu_power": 0,
         "mem_load": int(mem.percent),
         "mem_total": int(mem.total / (1024 * 1024)),
         "disk_load": int(disk.percent),
@@ -121,6 +122,13 @@ def collect(lhm_url=None):
     v.update(gpu_stats())
     if lhm_url:
         v.update(lhm_stats(lhm_url))
+    if lhm_lib is not None:
+        temp = lhm_lib.cpu_temp(temp_prefer)
+        fan = lhm_lib.fan_rpm(fan_prefer)
+        if temp is not None:
+            v["cpu_temp"] = int(round(temp))
+        if fan is not None:
+            v["cpu_fan"] = int(round(fan))
     return v
 
 
@@ -132,6 +140,17 @@ def main():
                     help="what the small number beside the fan icon shows")
     ap.add_argument("--lhm", metavar="URL",
                     help="LibreHardwareMonitor data.json URL, for real CPU temp/power")
+    ap.add_argument("--admin-sensors", action="store_true",
+                    help="read CPU temp and fan RPM directly via LibreHardwareMonitorLib "
+                         "(needs administrator + pip install pythonnet)")
+    ap.add_argument("--dll", default=None, help="path to LibreHardwareMonitorLib.dll")
+    ap.add_argument("--fan", default=None, metavar="NAME|#N",
+                    help="which fan sensor to use: a name, part of one, or #index "
+                         "(run RUN_SENSORS.bat to see the list)")
+    ap.add_argument("--temp", default=None, metavar="NAME|#N",
+                    help="which temperature sensor to use (default: CPU package)")
+    ap.add_argument("--list-sensors", action="store_true",
+                    help="with --admin-sensors: dump every sensor and exit")
     ap.add_argument("--fahrenheit", action="store_true",
                     help="let the panel convert the big number to F (max input 123)")
     ap.add_argument("--hz", type=float, default=1.0)
@@ -144,6 +163,23 @@ def main():
             print(f"  {name:<12} {desc}")
         return
 
+    lhm_lib = None
+    if args.admin_sensors or args.list_sensors:
+        from sensors import LhmSensors, SensorError, is_admin, DEFAULT_DLL
+        if not is_admin():
+            print("!! not running as administrator -- CPU temp and fan RPM will read 0.")
+            print("   use RUN_CPU_DEMO.bat, which elevates for you.\n")
+        try:
+            lhm_lib = LhmSensors(args.dll or DEFAULT_DLL)
+        except SensorError as e:
+            print(f"sensor init failed: {e}")
+            return
+        if args.list_sensors:
+            for hw, kind, name, value in lhm_lib.list_sensors():
+                print(f"  {hw:<28} {kind:<12} {name:<28} {value:>10.1f}")
+            lhm_lib.close()
+            return
+
     psutil.cpu_percent()                       # prime the counter
     period = 1.0 / args.hz if args.hz > 0 else 1.0
 
@@ -151,12 +187,22 @@ def main():
         print(f"panel open (output report {screen.output_len} bytes)")
         print(f"  big   = {args.big:<12} {METRICS[args.big]}")
         print(f"  small = {args.small:<12} {METRICS[args.small]}")
-        if args.big == "cpu_temp" and not args.lhm:
-            print("\n  NOTE: CPU temp needs --lhm; without it this will read 0.")
+        if lhm_lib is not None:
+            # Say out loud which sensors are in use. Boards expose several
+            # plausible-looking candidates and picking the wrong one is silent.
+            t, f = lhm_lib.pick_temp(args.temp), lhm_lib.pick_fan(args.fan)
+            print(f"  temp sensor  = {t[1]!r} ({t[0]})" if t else "  temp sensor  = none found")
+            print(f"  fan sensor   = {f[1]!r} ({f[0]})" if f else "  fan sensor   = none found")
+            others = [r for r in lhm_lib.fans() if not f or r[1] != f[1]]
+            if others:
+                print("  other fans   = " + ", ".join(f"{n} {v:.0f}rpm" for _, n, v in others))
+            print("  (wrong one? pass --fan / --temp with a name or #index)")
+        if args.big == "cpu_temp" and not (args.lhm or lhm_lib):
+            print("\n  NOTE: CPU temp needs --admin-sensors or --lhm; otherwise it reads 0.")
         print("\nCtrl+C to stop.\n")
         try:
             while True:
-                v = collect(args.lhm)
+                v = collect(args.lhm, lhm_lib, args.fan, args.temp)
                 big, small = v.get(args.big, 0), v.get(args.small, 0)
                 if args.fahrenheit and big > 123:
                     big = 123          # the panel's 8-bit F conversion wraps past this
@@ -165,6 +211,9 @@ def main():
                 time.sleep(period)
         except KeyboardInterrupt:
             print("\nstopped. The panel holds the last frame for a while, then fades.")
+        finally:
+            if lhm_lib is not None:
+                lhm_lib.close()
 
 
 if __name__ == "__main__":
