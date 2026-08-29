@@ -85,9 +85,16 @@ CREATE_SHORTCUT.bat      just the desktop shortcut
 START_NOW.bat            run once without installing
 ```
 
-`aio_daemon.pyw` posts CPU temperature and fan RPM at 1 Hz with no console
-window and sits in the system tray — hover for live values, right-click for
-config, log, or quit. Settings live in `config.json` (copied from
+`aio_daemon.pyw` posts at 1 Hz with no console window and sits in the system
+tray. Hover for live values; right-click to **choose what each readout shows**
+(Big readout / Small readout submenus), toggle fun mode, open the config or
+log, or quit. Both pickers are live — no restart, and the choice is saved.
+
+Available metrics: CPU temperature, fan rpm, load, clock, package power; GPU
+temperature, hot spot, load, clock, fan, power; memory in use and used GB;
+VRAM in use; the wall clock as HHMM, hour or minute; and `zero`. Anything
+your hardware does not expose shows as unavailable rather than quietly
+resolving to a different sensor. Settings live in `config.json` (copied from
 `config.example.json` on first run); problems go to `aio_daemon.log`.
 
 ### Fun mode

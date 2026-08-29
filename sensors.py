@@ -138,6 +138,17 @@ class LhmSensors:
                 out.append((str(hw.Name), str(sen.Name), float(sen.Value)))
         return out
 
+    def rows(self, refresh=True):
+        """[(hardware, kind, name, value)] for everything readable, one refresh."""
+        if refresh:
+            self._refresh()
+        out = []
+        for hw, sen in self._walk():
+            if sen.Value is not None:
+                out.append((str(hw.Name), str(sen.SensorType), str(sen.Name),
+                            float(sen.Value)))
+        return out
+
     def temps(self, refresh=True):
         """[(hardware, name, celsius)] for every temperature sensor."""
         if refresh:

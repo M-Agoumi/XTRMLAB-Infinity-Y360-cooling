@@ -194,23 +194,31 @@ class Daemon:
 
     def read(self):
         """
-        One hardware refresh, both values, strict sensor matching.
+        One hardware refresh, then whichever metrics the config asks for.
 
-        Strict matters: if the configured sensor is momentarily absent from
-        the refresh, returning some OTHER sensor puts a wrong number on the
-        panel for one frame. Better to hold the previous value.
+        A metric that is momentarily missing returns None and the previous
+        value is held, rather than substituting something else -- a wrong
+        number for one frame is worse than a stale one.
         """
-        t, f = self.sensors.read_pair(self.cfg.get("temp"), self.cfg.get("fan"),
-                                      strict=True)
-        if t is None and not self._warned_temp:
-            log(f"temperature sensor {self.cfg.get('temp')!r} not present; holding last value")
+        import metrics
+
+        rows = self.sensors.rows()
+        temp_pref, fan_pref = self.cfg.get("temp"), self.cfg.get("fan")
+        big_name = self.cfg.get("big", "cpu_temp")
+        small_name = self.cfg.get("small", "cpu_fan")
+
+        big_v = metrics.read(rows, big_name, temp_pref, fan_pref)
+        small_v = metrics.read(rows, small_name, temp_pref, fan_pref)
+
+        if big_v is None and not self._warned_temp:
+            log(f"metric {big_name!r} unavailable; holding last value")
             self._warned_temp = True
-        if f is None and not self._warned_fan:
-            log(f"fan sensor {self.cfg.get('fan')!r} not present; holding last value")
+        if small_v is None and not self._warned_fan:
+            log(f"metric {small_name!r} unavailable; holding last value")
             self._warned_fan = True
 
-        big = int(round(t[2])) if t else None
-        small = int(round(f[2])) if f else None
+        big = int(round(big_v)) if big_v is not None else None
+        small = int(round(small_v)) if small_v is not None else None
         return self._smoothed(big, small)
 
     def _smoothed(self, big, small):
@@ -330,25 +338,44 @@ class Daemon:
             self._warned_clamp = True
         return big, small
 
-    def toggle_fun(self):
-        self.fun = not self.fun
-        self.cfg["fun"] = self.fun
-        self._tick = 0                    # restart on a real reading
+    def set_metric(self, slot, name):
+        """slot is "big" or "small"."""
+        self.cfg[slot] = name
+        self._big_hist.clear()
+        self._small_hist.clear()
+        self._warned_temp = self._warned_fan = False
+        self.save_config()
+        log(f"{slot} readout -> {name}")
+
+    def save_config(self):
         try:
             with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
                 json.dump(self.cfg, fh, indent=2)
         except Exception as e:  # noqa: BLE001
-            log(f"could not persist fun setting: {e}")
+            log(f"could not persist config: {e}")
+
+    def toggle_fun(self):
+        self.fun = not self.fun
+        self.cfg["fun"] = self.fun
+        self._tick = 0                    # restart on a real reading
+        self.save_config()
         log(f"fun mode {'ON' if self.fun else 'OFF'}")
         return self.fun
 
     def tooltip(self):
-        big, small = self.last
-        unit = "F" if self.cfg.get("fahrenheit") else "C"
-        if self.status.startswith("retrying"):
+        import metrics
+
+        if self.status.startswith("retrying") or self.status.startswith("another"):
             return f"AIO screen - {self.status}"
+        big, small = self.last
+        big_name = self.cfg.get("big", "cpu_temp")
+        small_name = self.cfg.get("small", "cpu_fan")
+        bu = "F" if (self.cfg.get("fahrenheit") and big_name.endswith("temp")) else \
+            metrics.METRICS.get(big_name, ("", "", "", "", ""))[3]
+        su = metrics.METRICS.get(small_name, ("", "", "", "", ""))[3]
+        line = f"{big} {bu}".strip() + "   " + f"{small} {su}".strip()
         suffix = "   [fun mode]" if self.fun else ""
-        return f"AIO screen\n{big} {unit}   {small} rpm{suffix}"
+        return f"AIO screen\n{line}{suffix}"
 
 
 def run_tray(daemon):
@@ -362,6 +389,8 @@ def run_tray(daemon):
         daemon.run()
         return
 
+    import metrics
+
     image = Image.open(ICON_PATH) if os.path.exists(ICON_PATH) else \
         Image.new("RGB", (32, 32), (69, 196, 255))
 
@@ -374,7 +403,8 @@ def run_tray(daemon):
         icon.stop()
 
     def on_open_log(_icon, _item):
-        os.startfile(LOG_PATH) if os.path.exists(LOG_PATH) else None
+        if os.path.exists(LOG_PATH):
+            os.startfile(LOG_PATH)
 
     def on_open_config(_icon, _item):
         os.startfile(CONFIG_PATH)
@@ -383,10 +413,30 @@ def run_tray(daemon):
         daemon.toggle_fun()
         icon.update_menu()
 
+    def metric_menu(slot):
+        """A radio list of everything that can go in this readout."""
+        def make(name):
+            def choose(icon, _item):
+                daemon.set_metric(slot, name)
+                icon.update_menu()
+            return pystray.MenuItem(
+                f"{name}  --  {metrics.describe(name)}", choose,
+                checked=lambda _i, n=name: daemon.cfg.get(slot) == n,
+                radio=True)
+        return pystray.Menu(*[make(n) for n in metrics.names()])
+
     icon = pystray.Icon(
         "aio_screen", image, "AIO screen",
         menu=pystray.Menu(
-            pystray.MenuItem(lambda _i: daemon.tooltip().replace("\n", "  "), None, enabled=False),
+            # Callable text is re-evaluated only when the menu is rebuilt, so
+            # the refresh loop below calls update_menu() -- without that this
+            # line is frozen at whatever it said when the icon was created,
+            # which is 0 / 0 because nothing has been read yet.
+            pystray.MenuItem(lambda _i: daemon.tooltip().replace("\n", "  "),
+                             None, enabled=False),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Big readout", metric_menu("big")),
+            pystray.MenuItem("Small readout", metric_menu("small")),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Fun mode", on_toggle_fun,
                              checked=lambda _i: daemon.fun),
@@ -400,7 +450,8 @@ def run_tray(daemon):
     def refresh():
         while not daemon.stop.is_set():
             try:
-                icon.title = daemon.tooltip()
+                icon.title = daemon.tooltip()       # hover text
+                icon.update_menu()                  # right-click text
             except Exception:  # noqa: BLE001
                 pass
             time.sleep(2)
