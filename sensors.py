@@ -27,13 +27,23 @@ from __future__ import annotations
 
 import ctypes
 import os
+import sys
 
 # Searched in order. `lib/` is where INSTALL.bat puts a downloaded copy; the
 # PC Monitor path is where the vendor app already has one on machines that
 # shipped with it.
-DLL_CANDIDATES = (
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib",
-                 "LibreHardwareMonitorLib.dll"),
+def _search_roots():
+    roots = [os.path.dirname(os.path.abspath(__file__))]
+    if getattr(sys, "frozen", False):
+        roots.insert(0, getattr(sys, "_MEIPASS", ""))          # bundled copy
+        roots.insert(1, os.path.dirname(os.path.abspath(sys.executable)))
+    return [r for r in roots if r]
+
+
+DLL_CANDIDATES = tuple(
+    [os.path.join(root, "lib", "LibreHardwareMonitorLib.dll") for root in _search_roots()]
+    + [os.path.join(root, "LibreHardwareMonitorLib.dll") for root in _search_roots()]
+) + (
     r"C:\Program Files (x86)\PC Monitor\LibreHardwareMonitorLib.dll",
     r"C:\Program Files\LibreHardwareMonitor\LibreHardwareMonitorLib.dll",
     r"C:\Program Files (x86)\LibreHardwareMonitor\LibreHardwareMonitorLib.dll",

@@ -60,7 +60,15 @@ If rc = 0 Then
 End If
 
 ' --- fallback: task not installed, so elevate the hard way (UAC prompt) ---
-If fso.FileExists(here & "\START_NOW.bat") Then
+If fso.FileExists(here & "\AIO Screen.exe") Then
+    sh.Run """" & here & "\AIO Screen.exe""", 0, False
+    If Not WaitForDaemon(20) Then
+        MsgBox "Could not start the daemon." & vbCrLf & vbCrLf & _
+               "The scheduled task 'AIO_Screen' is not installed, and starting" & vbCrLf & _
+               "AIO Screen.exe did not come up (a UAC prompt may have been declined).", _
+               vbExclamation, "AIO Screen"
+    End If
+ElseIf fso.FileExists(here & "\START_NOW.bat") Then
     sh.Run """" & here & "\START_NOW.bat""", 0, False
     If Not WaitForDaemon(20) Then
         MsgBox "Could not start the daemon." & vbCrLf & vbCrLf & _

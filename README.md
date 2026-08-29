@@ -31,6 +31,22 @@ one, twelve of them do nothing. See [FINDINGS.md](FINDINGS.md).
 
 ## Install
 
+**Just want it working?** Download `AIO Screen.exe` from the
+[latest release](../../releases/latest), put it in a folder of its own, and run
+it. It bundles Python, the libraries and the sensor DLL — nothing to install.
+Right-click the tray icon to configure it; `AIO Screen.exe --doctor` writes a
+report if something is wrong.
+
+It writes `config.json`, `aio_daemon.log` and `panel.lock` beside itself, so
+give it a folder rather than leaving it in Downloads. Windows will prompt for
+administrator rights: CPU temperature needs a kernel driver, and without
+elevation it would silently read 0.
+
+To have it start at logon, put `INSTALL_STARTUP.bat` in the same folder and run
+that — it registers the elevated task and makes a desktop shortcut.
+
+### From source
+
 ```
 INSTALL.bat
 ```
@@ -272,6 +288,7 @@ tools that worked it out are included:
 | `aio_daemon.pyw` | background tray app |
 | `demo_stats.py` | live demo; `--big`/`--small` choose each readout |
 | `start_panel.vbs` | what the desktop shortcut runs |
+| `aio_screen.spec` / `BUILD_EXE.bat` | build the standalone .exe |
 | `doctor.py` | environment check: what is missing and how to fix it |
 | `install.ps1` | packages + downloads the sensor DLL |
 

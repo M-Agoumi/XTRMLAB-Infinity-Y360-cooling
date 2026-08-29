@@ -56,14 +56,35 @@ import time
 import traceback
 from datetime import datetime
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+
+def app_dir():
+    """
+    Where user-owned files live: config, log, lock.
+
+    Under PyInstaller onefile, __file__ points into a temporary extraction
+    directory that is deleted on exit -- writing config.json there would throw
+    the user's settings away every run. Next to the .exe is the right place.
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def bundle_dir():
+    """Where read-only bundled resources live (icon, example config, DLLs)."""
+    if getattr(sys, "frozen", False):
+        return getattr(sys, "_MEIPASS", app_dir())
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+HERE = app_dir()
+sys.path.insert(0, bundle_dir())
 
 CONFIG_PATH = os.path.join(HERE, "config.json")
-EXAMPLE_CONFIG = os.path.join(HERE, "config.example.json")
+EXAMPLE_CONFIG = os.path.join(bundle_dir(), "config.example.json")
 LOG_PATH = os.path.join(HERE, "aio_daemon.log")
 PID_PATH = os.path.join(HERE, "daemon.pid")
-ICON_PATH = os.path.join(HERE, "icon.ico")
+ICON_PATH = os.path.join(bundle_dir(), "icon.ico")
 MAX_LOG_BYTES = 256 * 1024
 
 DEFAULTS = {
@@ -509,7 +530,34 @@ def run_tray(daemon):
     icon.run()
 
 
+def run_doctor_report():
+    """
+    A windowed .exe has no console, so the check writes a file and opens it.
+    Without this, a user whose machine is missing something has no way to find
+    out what -- the exe would just fail to show a tray icon.
+    """
+    import contextlib
+    import io
+    import subprocess
+
+    out = io.StringIO()
+    try:
+        import doctor
+        with contextlib.redirect_stdout(out):
+            doctor.main()
+    except Exception as e:  # noqa: BLE001
+        out.write(f"\ncheck failed to run: {e}\n")
+    report = os.path.join(HERE, "doctor_report.txt")
+    with open(report, "w", encoding="utf-8") as fh:
+        fh.write(out.getvalue())
+    with contextlib.suppress(Exception):
+        subprocess.Popen(["notepad.exe", report])
+
+
 def main():
+    if "--doctor" in sys.argv:
+        run_doctor_report()
+        return
     log("=" * 60)
     log(f"starting (python {sys.version.split()[0]}, elevated="
         f"{bool(ctypes.windll.shell32.IsUserAnAdmin())})")

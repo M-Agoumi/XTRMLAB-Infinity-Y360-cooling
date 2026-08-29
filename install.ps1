@@ -7,6 +7,8 @@
 # On a machine that shipped with the vendor "PC Monitor" app the DLL is already
 # present, and this script uses that copy instead of downloading anything.
 
+param([switch]$DllOnly)
+
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $lib  = Join-Path $here 'lib'
@@ -22,7 +24,25 @@ Say " aio_screen setup"
 Say "======================================================================"
 Say ""
 
+if ($DllOnly) {
+    # BUILD_EXE.bat calls us just to fetch the DLL for bundling.
+    $lib = Join-Path $here 'lib'
+    $existing = @(
+        (Join-Path $lib 'LibreHardwareMonitorLib.dll'),
+        'C:\Program Files (x86)\PC Monitor\LibreHardwareMonitorLib.dll'
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($existing -and $existing -notlike "$lib*") {
+        New-Item -ItemType Directory -Path $lib -Force | Out-Null
+        Copy-Item $existing (Join-Path $lib 'LibreHardwareMonitorLib.dll') -Force
+        $sharp = Join-Path (Split-Path $existing) 'HidSharp.dll'
+        if (Test-Path $sharp) { Copy-Item $sharp (Join-Path $lib 'HidSharp.dll') -Force }
+        Good "copied the sensor library into lib\ for bundling"
+        exit 0
+    }
+}
+
 # --- 1. python --------------------------------------------------------------
+if (-not $DllOnly) {
 Say "[1/4] Python"
 try {
     $pyv = & python -c "import sys;print('%d.%d %s-bit' % (sys.version_info[0], sys.version_info[1], 64 if sys.maxsize > 2**32 else 32))"
@@ -43,6 +63,8 @@ if (Test-Path $req) {
 }
 if ($LASTEXITCODE -ne 0) { Bad "pip failed -- see the output above."; exit 1 }
 Good "packages installed"
+
+}
 
 # --- 3. LibreHardwareMonitorLib.dll ----------------------------------------
 Say ""
@@ -117,6 +139,8 @@ if ($found) {
         Say "  Everything except CPU temperature and fan RPM works without it."
     }
 }
+
+if ($DllOnly) { exit 0 }
 
 # --- 4. verify --------------------------------------------------------------
 Say ""

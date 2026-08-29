@@ -41,7 +41,15 @@ ERROR_ACCESS_DENIED = 5
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
 MUTEX_NAME = "aio_screen_panel"
-LOCK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "panel.lock")
+def _app_dir():
+    # Frozen: next to the .exe, not in the temp extraction directory, so every
+    # process agrees on one lock file.
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+LOCK_PATH = os.path.join(_app_dir(), "panel.lock")
 
 kernel32.CreateMutexW.restype = wintypes.HANDLE
 kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR]
