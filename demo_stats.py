@@ -158,6 +158,18 @@ def main():
     args = ap.parse_args()
 
     if args.list:
+        try:
+            import metrics as mcat
+            print("big readout (0-127 -- larger metrics are not offered):\n")
+            for name in mcat.names("big"):
+                print(f"  {name:<13} {mcat.describe(name)}")
+            print("\nsmall readout (0-65535, exact below ~1020):\n")
+            for name in mcat.names("small"):
+                flag = "" if mcat.exact_in("small", name) else "   [last digits unreliable]"
+                print(f"  {name:<13} {mcat.describe(name)}{flag}")
+            return
+        except ImportError:
+            pass
         print("what you can put in either readout:\n")
         for name, desc in METRICS.items():
             print(f"  {name:<12} {desc}")

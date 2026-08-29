@@ -168,6 +168,7 @@ class Daemon:
         self._warned_temp = False
         self._warned_fan = False
         self._warned_clamp = False
+        self._warned_big_fit = False
         self.fun = bool(cfg.get("fun", False))
         self._tick = 0
 
@@ -206,6 +207,11 @@ class Daemon:
         temp_pref, fan_pref = self.cfg.get("temp"), self.cfg.get("fan")
         big_name = self.cfg.get("big", "cpu_temp")
         small_name = self.cfg.get("small", "cpu_fan")
+
+        if not metrics.suits("big", big_name) and not self._warned_big_fit:
+            log(f"config big={big_name!r} maxes out around {metrics.typical_max(big_name)}, "
+                f"but the big readout only shows 0-{metrics.BIG_MAX}; it will clamp")
+            self._warned_big_fit = True
 
         big_v = metrics.read(rows, big_name, temp_pref, fan_pref)
         small_v = metrics.read(rows, small_name, temp_pref, fan_pref)
@@ -414,16 +420,34 @@ def run_tray(daemon):
         icon.update_menu()
 
     def metric_menu(slot):
-        """A radio list of everything that can go in this readout."""
+        """
+        Only what this readout can actually display.
+
+        The big slot is a 7-bit field, so a CPU clock of 5300 MHz would arrive
+        as 127 -- offering it is offering a broken choice. metrics.suits()
+        filters by each metric's realistic maximum. In the small slot
+        everything fits, but values above ~1020 hit the firmware's digit
+        corruption, so those are marked rather than hidden.
+        """
         def make(name):
             def choose(icon, _item):
                 daemon.set_metric(slot, name)
                 icon.update_menu()
+            label = f"{name}  --  {metrics.describe(name)}"
+            if not metrics.exact_in(slot, name):
+                label += "   [last digits unreliable]"
             return pystray.MenuItem(
-                f"{name}  --  {metrics.describe(name)}", choose,
+                label, choose,
                 checked=lambda _i, n=name: daemon.cfg.get(slot) == n,
                 radio=True)
-        return pystray.Menu(*[make(n) for n in metrics.names()])
+
+        items = [make(n) for n in metrics.names(slot)]
+        if slot == "big":
+            items.append(pystray.Menu.SEPARATOR)
+            items.append(pystray.MenuItem(
+                f"(clocks, power and rpm omitted: this readout is 0-"
+                f"{metrics.BIG_MAX})", None, enabled=False))
+        return pystray.Menu(*items)
 
     icon = pystray.Icon(
         "aio_screen", image, "AIO screen",

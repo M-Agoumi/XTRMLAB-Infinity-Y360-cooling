@@ -90,11 +90,18 @@ tray. Hover for live values; right-click to **choose what each readout shows**
 (Big readout / Small readout submenus), toggle fun mode, open the config or
 log, or quit. Both pickers are live — no restart, and the choice is saved.
 
-Available metrics: CPU temperature, fan rpm, load, clock, package power; GPU
-temperature, hot spot, load, clock, fan, power; memory in use and used GB;
-VRAM in use; the wall clock as HHMM, hour or minute; and `zero`. Anything
-your hardware does not expose shows as unavailable rather than quietly
-resolving to a different sensor. Settings live in `config.json` (copied from
+**Each menu only offers what that readout can actually show.** The big one is
+a 7-bit field, so anything that runs past 127 — clocks, rpm, watts, HHMM —
+would arrive clamped at 127 and is not listed:
+
+| readout | range | offered |
+|---|---|---|
+| big | 0–127 | temperatures, loads, VRAM %, hour, minute, zero |
+| small | 0–65535 | everything, but values over ~1020 are marked *last digits unreliable* |
+
+Anything your hardware does not expose shows as unavailable rather than
+quietly resolving to a different sensor. `python demo_stats.py --list` prints
+both lists. Settings live in `config.json` (copied from
 `config.example.json` on first run); problems go to `aio_daemon.log`.
 
 ### Fun mode
