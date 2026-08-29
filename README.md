@@ -42,8 +42,20 @@ give it a folder rather than leaving it in Downloads. Windows will prompt for
 administrator rights: CPU temperature needs a kernel driver, and without
 elevation it would silently read 0.
 
-To have it start at logon, put `INSTALL_STARTUP.bat` in the same folder and run
-that — it registers the elevated task and makes a desktop shortcut.
+**To start it at logon**, right-click the tray icon and tick **Start at
+logon** — that is all. It registers an elevated Task Scheduler entry pointing
+at the .exe and adds a desktop shortcut. Untick to remove it.
+
+The same thing from a command line, if you prefer:
+
+```
+"AIO Screen.exe" --install-startup      start at logon (also makes a shortcut)
+"AIO Screen.exe" --uninstall-startup    stop starting at logon
+"AIO Screen.exe" --doctor               write a report on what is missing
+"AIO Screen.exe" --help                 list these
+```
+
+You do not need `INSTALL_STARTUP.bat` — that is for running from source.
 
 ### From source
 

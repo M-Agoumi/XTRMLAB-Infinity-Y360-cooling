@@ -458,6 +458,24 @@ def run_tray(daemon):
         daemon.toggle_fun()
         icon.update_menu()
 
+    def on_toggle_startup(icon, _item):
+        if startup_installed():
+            ok, err = uninstall_startup()
+            message("Removed. AIO Screen will no longer start at logon." if ok
+                    else f"Could not remove it.\n\n{err}", style=0x40 if ok else 0x30)
+        else:
+            ok, err = install_startup()
+            made, _ = make_desktop_shortcut()
+            message(("Installed.\n\nAIO Screen will start at logon, elevated, with no "
+                     "UAC prompt." + ("\nA desktop shortcut was created too." if made else ""))
+                    if ok else f"Could not install it.\n\n{err}", style=0x40 if ok else 0x30)
+        icon.update_menu()
+
+    def on_make_shortcut(_icon, _item):
+        made, err = make_desktop_shortcut()
+        message("Desktop shortcut created." if made
+                else f"Could not create the shortcut.\n\n{err}", style=0x40 if made else 0x30)
+
     def metric_menu(slot):
         """
         Only what this readout can actually display.
@@ -508,6 +526,10 @@ def run_tray(daemon):
             pystray.MenuItem("Fun mode", on_toggle_fun,
                              checked=lambda _i: daemon.fun),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Start at logon", on_toggle_startup,
+                             checked=lambda _i: startup_installed()),
+            pystray.MenuItem("Create desktop shortcut", on_make_shortcut),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("Edit config.json", on_open_config),
             pystray.MenuItem("Open log", on_open_log),
             pystray.MenuItem("Quit", on_quit),
@@ -528,6 +550,96 @@ def run_tray(daemon):
 
     threading.Thread(target=refresh, daemon=True).start()
     icon.run()
+
+
+TASK_NAME = "AIO_Screen"
+
+
+def _launch_target():
+    """
+    The command Task Scheduler should run.
+
+    Frozen: the .exe itself. From source: pythonw plus this script, so the
+    same code works either way.
+    """
+    if getattr(sys, "frozen", False):
+        return f'"{os.path.abspath(sys.executable)}"'
+    pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+    if not os.path.exists(pythonw):
+        pythonw = sys.executable
+    return f'"{pythonw}" "{os.path.abspath(__file__)}"'
+
+
+def _run(args):
+    import subprocess
+    return subprocess.run(args, capture_output=True, text=True,
+                          creationflags=0x08000000)      # no console flash
+
+
+def startup_installed():
+    return _run(["schtasks", "/Query", "/TN", TASK_NAME]).returncode == 0
+
+
+def install_startup():
+    """
+    Register an elevated logon task pointing at ourselves.
+
+    A Startup-folder shortcut would trigger a UAC prompt on every boot, since
+    reading CPU temperature needs admin. Task Scheduler holds the elevation,
+    so it starts silently.
+    """
+    r = _run(["schtasks", "/Create", "/TN", TASK_NAME, "/SC", "ONLOGON",
+              "/RL", "HIGHEST", "/F", "/TR", _launch_target()])
+    ok = r.returncode == 0
+    log(f"install startup: {'ok' if ok else 'FAILED'} {r.stderr.strip()}")
+    return ok, (r.stderr or r.stdout).strip()
+
+
+def uninstall_startup():
+    r = _run(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"])
+    ok = r.returncode == 0
+    log(f"uninstall startup: {'ok' if ok else 'FAILED'} {r.stderr.strip()}")
+    return ok, (r.stderr or r.stdout).strip()
+
+
+def make_desktop_shortcut():
+    """
+    A desktop shortcut for restarting after a tray Quit.
+
+    It points at the scheduled task when one exists, because launching the
+    .exe directly would prompt for UAC every time -- the task carries the
+    elevation instead.
+    """
+    exe = os.path.abspath(sys.executable) if getattr(sys, "frozen", False) else None
+    if startup_installed():
+        target, args = os.path.join(os.environ.get("WINDIR", r"C:\Windows"),
+                                    "System32", "schtasks.exe"), f'/Run /TN "{TASK_NAME}"'
+    elif exe:
+        target, args = exe, ""
+    else:
+        return False, "run the built .exe, or install startup first"
+
+    icon = exe or ICON_PATH
+    ps = (
+        "$d=[Environment]::GetFolderPath('Desktop');"
+        "$s=(New-Object -ComObject WScript.Shell).CreateShortcut("
+        "  (Join-Path $d 'AIO Screen.lnk'));"
+        f"$s.TargetPath='{target}';"
+        f"$s.Arguments='{args}';"
+        f"$s.IconLocation='{icon}';"
+        f"$s.WorkingDirectory='{HERE}';"
+        "$s.Description='Start the AIO pump-cap display';"
+        "$s.Save()"
+    )
+    r = _run(["powershell", "-NoProfile", "-Command", ps])
+    return r.returncode == 0, (r.stderr or "").strip()
+
+
+def message(text, title="AIO Screen", style=0x40):
+    try:
+        ctypes.windll.user32.MessageBoxW(None, text, title, style)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def run_doctor_report():
@@ -555,8 +667,39 @@ def run_doctor_report():
 
 
 def main():
-    if "--doctor" in sys.argv:
+    args = [a.lower() for a in sys.argv[1:]]
+
+    if "--doctor" in args:
         run_doctor_report()
+        return
+
+    if "--install-startup" in args:
+        ok, err = install_startup()
+        made, _ = make_desktop_shortcut()
+        message(
+            ("Installed.\n\nAIO Screen will start automatically at logon, with "
+             "administrator rights and no UAC prompt."
+             + ("\n\nA desktop shortcut was created too." if made else ""))
+            if ok else
+            f"Could not create the scheduled task.\n\n{err}\n\n"
+            "Try running this again from an administrator prompt.",
+            style=0x40 if ok else 0x30)
+        return
+
+    if "--uninstall-startup" in args:
+        ok, err = uninstall_startup()
+        message("Removed. AIO Screen will no longer start at logon." if ok
+                else f"Could not remove the scheduled task.\n\n{err}", style=0x40 if ok else 0x30)
+        return
+
+    if "--help" in args or "/?" in args:
+        message(
+            "AIO Screen\n\n"
+            "  (no arguments)        run in the system tray\n"
+            "  --install-startup     start automatically at logon\n"
+            "  --uninstall-startup   stop starting at logon\n"
+            "  --doctor              write a report on what is missing\n\n"
+            "Everything is also available by right-clicking the tray icon.")
         return
     log("=" * 60)
     log(f"starting (python {sys.version.split()[0]}, elevated="
