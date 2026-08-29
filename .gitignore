@@ -19,6 +19,7 @@ test_output.log
 
 # --- Local scratch ----------------------------------------------------
 panel.lock
+pcmonitor_autostart_backup/
 daemon.pid
 *.bak
 *.tmp

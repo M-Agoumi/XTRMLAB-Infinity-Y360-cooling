@@ -187,6 +187,27 @@ different physical sensor, slower and cooler. Neither is wrong. For a calmer
 readout use `"temp": "Core Average"`, and `"smooth"` takes a median over the
 last N samples.
 
+## Stopping the vendor app
+
+While "PC Monitor" runs it posts its own frames, and since the panel has no
+arbitration the display flickers between its numbers and yours. Closing it is
+not enough if it starts at logon.
+
+```
+DISABLE_PC_MONITOR.bat     find and disable its autostart
+RESTORE_PC_MONITOR.bat     put it all back
+```
+
+It searches the registry `Run` keys (HKCU, HKLM, Wow6432Node), both Startup
+folders, scheduled tasks and services, shows you what it found, and only acts
+if you say yes. Nothing is deleted: registry values are exported to a `.reg`
+first, Startup shortcuts are *moved* into a backup folder, tasks are disabled
+and services set to Manual — all recorded in a manifest the restore script
+reads back.
+
+If you later launch the vendor app by hand it may re-add its own autostart
+entry; run the disable script again.
+
 ## Only one writer at a time
 
 The panel has no arbitration: any process that opens it can post, and the last
