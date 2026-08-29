@@ -104,18 +104,20 @@ class LhmSensors:
             rows.append((hw, kind, name, value))
         return rows
 
-    def fans(self):
+    def fans(self, refresh=True):
         """[(hardware, name, rpm)] for every fan tacho, in discovery order."""
-        self._refresh()
+        if refresh:
+            self._refresh()
         out = []
         for hw, sen in self._walk():
             if str(sen.SensorType) == "Fan" and sen.Value is not None:
                 out.append((str(hw.Name), str(sen.Name), float(sen.Value)))
         return out
 
-    def temps(self):
+    def temps(self, refresh=True):
         """[(hardware, name, celsius)] for every temperature sensor."""
-        self._refresh()
+        if refresh:
+            self._refresh()
         out = []
         for hw, sen in self._walk():
             if str(sen.SensorType) == "Temperature" and sen.Value is not None:
@@ -156,11 +158,16 @@ class LhmSensors:
                     return row
         return None
 
-    def pick_temp(self, prefer=None):
+    def pick_temp(self, prefer=None, strict=False):
         rows = self.temps()
         hit = self._pick(rows, prefer)
         if hit:
             return hit
+        if prefer and strict:
+            # A named sensor that is momentarily missing must NOT silently
+            # become a different sensor -- that is how a stray high reading
+            # flashes onto the panel for one frame.
+            return None
         # No preference: CPU package first, else the hottest CPU core.
         for row in rows:
             n = row[1].lower()
@@ -172,11 +179,13 @@ class LhmSensors:
             return max(cores, key=lambda r: r[2])
         return rows[0] if rows else None
 
-    def pick_fan(self, prefer=None):
+    def pick_fan(self, prefer=None, strict=False):
         rows = self.fans()
         hit = self._pick(rows, prefer)
         if hit:
             return hit
+        if prefer and strict:
+            return None
         # No preference: the FIRST fan that is actually turning. SuperIO chips
         # enumerate in header order and #1 is the CPU header on every board
         # seen so far, so this beats both "fastest" (which picks the pump on
@@ -186,13 +195,44 @@ class LhmSensors:
             return spinning[0]
         return rows[0] if rows else None
 
-    def cpu_temp(self, prefer=None):
-        hit = self.pick_temp(prefer)
+    def cpu_temp(self, prefer=None, strict=False):
+        hit = self.pick_temp(prefer, strict)
         return hit[2] if hit else None
 
-    def fan_rpm(self, prefer=None):
-        hit = self.pick_fan(prefer)
+    def fan_rpm(self, prefer=None, strict=False):
+        hit = self.pick_fan(prefer, strict)
         return hit[2] if hit else None
+
+    def read_pair(self, temp_prefer=None, fan_prefer=None, strict=True):
+        """
+        Both values from ONE hardware refresh.
+
+        Calling cpu_temp() and fan_rpm() separately refreshes every sensor
+        twice per cycle, which on this box costs hundreds of milliseconds and
+        makes the update cadence lumpy.
+        """
+        self._refresh()
+        temps, fans = [], []
+        for hw, sen in self._walk():
+            if sen.Value is None:
+                continue
+            kind = str(sen.SensorType)
+            if kind == "Temperature":
+                temps.append((str(hw.Name), str(sen.Name), float(sen.Value)))
+            elif kind == "Fan":
+                fans.append((str(hw.Name), str(sen.Name), float(sen.Value)))
+
+        t = self._pick(temps, temp_prefer)
+        if t is None and not (temp_prefer and strict):
+            for row in temps:
+                if "package" in row[1].lower() or "tctl" in row[1].lower():
+                    t = row
+                    break
+        f = self._pick(fans, fan_prefer)
+        if f is None and not (fan_prefer and strict):
+            spinning = [r for r in fans if r[2] > 0]
+            f = spinning[0] if spinning else (fans[0] if fans else None)
+        return t, f
 
     def close(self):
         try:

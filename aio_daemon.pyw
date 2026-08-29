@@ -19,6 +19,7 @@ on first run:
       "temp": "CPU Package",  sensor name or "#index"
       "fan":  "Fan #1",       sensor name or "#index"
       "hz":   1.0,
+      "smooth": 3,            median of the last N samples; 1 = raw
       "fahrenheit": false,
       "dll":  null            null = the copy bundled with PC Monitor
     }
@@ -51,6 +52,7 @@ DEFAULTS = {
     "hz": 1.0,
     "fahrenheit": False,
     "dll": None,
+    "smooth": 3,
 }
 
 
@@ -97,6 +99,10 @@ class Daemon:
         self.last = (0, 0)
         self.screen = None
         self.sensors = None
+        self._big_hist = []
+        self._small_hist = []
+        self._warned_temp = False
+        self._warned_fan = False
 
     # -- data ---------------------------------------------------------
     def _open_sensors(self):
@@ -115,16 +121,55 @@ class Daemon:
         log(f"panel open, output report {self.screen.output_len} bytes")
 
     def read(self):
-        temp = self.sensors.cpu_temp(self.cfg.get("temp"))
-        fan = self.sensors.fan_rpm(self.cfg.get("fan"))
-        return (int(round(temp)) if temp is not None else 0,
-                int(round(fan)) if fan is not None else 0)
+        """
+        One hardware refresh, both values, strict sensor matching.
+
+        Strict matters: if the configured sensor is momentarily absent from
+        the refresh, returning some OTHER sensor puts a wrong number on the
+        panel for one frame. Better to hold the previous value.
+        """
+        t, f = self.sensors.read_pair(self.cfg.get("temp"), self.cfg.get("fan"),
+                                      strict=True)
+        if t is None and not self._warned_temp:
+            log(f"temperature sensor {self.cfg.get('temp')!r} not present; holding last value")
+            self._warned_temp = True
+        if f is None and not self._warned_fan:
+            log(f"fan sensor {self.cfg.get('fan')!r} not present; holding last value")
+            self._warned_fan = True
+
+        big = int(round(t[2])) if t else None
+        small = int(round(f[2])) if f else None
+        return self._smoothed(big, small)
+
+    def _smoothed(self, big, small):
+        """Median of the last N samples. CPU package temperature is spiky by
+        nature -- it is the hottest thing the die reports -- and a raw 1 Hz
+        sample catches those spikes, which reads as the number jumping."""
+        n = max(1, int(self.cfg.get("smooth", 3)))
+        if big is not None:
+            self._big_hist.append(big)
+            del self._big_hist[:-n]
+        if small is not None:
+            self._small_hist.append(small)
+            del self._small_hist[:-n]
+
+        def med(values, fallback):
+            if not values:
+                return fallback
+            ordered = sorted(values)
+            return ordered[len(ordered) // 2]
+
+        return med(self._big_hist, self.last[0]), med(self._small_hist, self.last[1])
 
     # -- loop ---------------------------------------------------------
     def run(self):
         from aio_screen import Stats
         period = 1.0 / max(0.1, float(self.cfg.get("hz", 1.0)))
         backoff = 1.0
+        # Pace against a fixed schedule. Sleeping `period` AFTER the work makes
+        # the real interval period + read-time, and the sensor read is not
+        # constant, so the cadence wanders.
+        next_tick = time.monotonic()
         while not self.stop.is_set():
             try:
                 if self.sensors is None:
@@ -139,7 +184,12 @@ class Daemon:
                 self.last = (big, small)
                 self.status = "running"
                 backoff = 1.0
-                self.stop.wait(period)
+                next_tick += period
+                delay = next_tick - time.monotonic()
+                if delay < 0:                      # a slow read: resync, never burst
+                    next_tick = time.monotonic()
+                    delay = 0
+                self.stop.wait(delay)
             except Exception as e:  # noqa: BLE001
                 # Unplugged panel, sleep/resume, driver hiccup: drop everything
                 # and rebuild on the next pass rather than dying silently.
@@ -153,6 +203,7 @@ class Daemon:
                 self.screen = None
                 self.stop.wait(backoff)
                 backoff = min(30.0, backoff * 2)
+                next_tick = time.monotonic()
 
         try:
             if self.screen:
