@@ -86,7 +86,14 @@ START_NOW.bat            run once without installing
 ```
 
 `aio_daemon.pyw` posts at 1 Hz with no console window and sits in the system
-tray. Hover for live values; right-click to **choose what each readout shows**
+tray. **Hover the icon for live values** — the tooltip keeps ticking. The
+right-click menu also shows the reading, but a Windows tray menu is modal:
+while it is open the shell owns a snapshot and nothing can change it, so that
+line is frozen at the moment you opened it (and stamped with the time to make
+that obvious). The menu is rebuilt once a second so the snapshot is always
+fresh when it opens.
+
+Right-click to **choose what each readout shows**
 (Big readout / Small readout submenus), toggle fun mode, open the config or
 log, or quit. Both pickers are live — no restart, and the choice is saved.
 

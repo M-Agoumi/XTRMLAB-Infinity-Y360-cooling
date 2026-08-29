@@ -169,6 +169,7 @@ class Daemon:
         self._warned_fan = False
         self._warned_clamp = False
         self._warned_big_fit = False
+        self._last_read_at = 0.0
         self.fun = bool(cfg.get("fun", False))
         self._tick = 0
 
@@ -278,6 +279,7 @@ class Daemon:
                         small = joke[1]
                 self.screen.send(Stats(cpu_temp=big, cpu_fan=small))
                 self.last = (big, small)
+                self._last_read_at = time.time()
                 self._tick += 1
                 self.status = "running"
                 backoff = 1.0
@@ -344,6 +346,10 @@ class Daemon:
             self._warned_clamp = True
         return big, small
 
+    def reading_age(self):
+        """Seconds since the last successful read, for the menu's timestamp."""
+        return max(0.0, time.time() - self._last_read_at)
+
     def set_metric(self, slot, name):
         """slot is "big" or "small"."""
         self.cfg[slot] = name
@@ -367,6 +373,18 @@ class Daemon:
         self.save_config()
         log(f"fun mode {'ON' if self.fun else 'OFF'}")
         return self.fun
+
+    def reading(self):
+        """The current values as one line, e.g. '47 C   1439 rpm'."""
+        import metrics
+
+        big, small = self.last
+        big_name = self.cfg.get("big", "cpu_temp")
+        small_name = self.cfg.get("small", "cpu_fan")
+        bu = "F" if (self.cfg.get("fahrenheit") and big_name.endswith("temp")) else \
+            metrics.METRICS.get(big_name, ("", "", "", "", ""))[3]
+        su = metrics.METRICS.get(small_name, ("", "", "", "", ""))[3]
+        return f"{big} {bu}".strip() + "   " + f"{small} {su}".strip()
 
     def tooltip(self):
         import metrics
@@ -452,11 +470,15 @@ def run_tray(daemon):
     icon = pystray.Icon(
         "aio_screen", image, "AIO screen",
         menu=pystray.Menu(
-            # Callable text is re-evaluated only when the menu is rebuilt, so
-            # the refresh loop below calls update_menu() -- without that this
-            # line is frozen at whatever it said when the icon was created,
-            # which is 0 / 0 because nothing has been read yet.
-            pystray.MenuItem(lambda _i: daemon.tooltip().replace("\n", "  "),
+            # A Windows tray menu is MODAL: while it is open the shell owns a
+            # snapshot of it, and nothing we do can change what is on screen.
+            # So this line is the reading as of the moment the menu opened --
+            # correct, but frozen until you close and reopen. The refresh loop
+            # below rebuilds the menu once a second so that snapshot is always
+            # fresh, and the hover tooltip is the place to watch values move.
+            pystray.MenuItem(lambda _i: daemon.reading(), None, enabled=False),
+            pystray.MenuItem(lambda _i: f"   (as of {time.strftime('%H:%M:%S')}"
+                                        f" -- hover the icon for live values)",
                              None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Big readout", metric_menu("big")),
@@ -478,7 +500,10 @@ def run_tray(daemon):
                 icon.update_menu()                  # right-click text
             except Exception:  # noqa: BLE001
                 pass
-            time.sleep(2)
+            # Once a second, matching the data rate: the menu cannot update
+            # while open, so the best we can do is have a fresh snapshot ready
+            # whenever it is opened.
+            time.sleep(1)
 
     threading.Thread(target=refresh, daemon=True).start()
     icon.run()
