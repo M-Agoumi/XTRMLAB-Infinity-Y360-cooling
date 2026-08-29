@@ -45,6 +45,9 @@ if errorlevel 1 (
 echo.
 echo Done. Starting it now so you do not have to log out...
 schtasks /Run /TN "AIO_Screen" >nul
+echo Creating a desktop shortcut for restarting it after a Quit...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0create_shortcut.ps1"
+
 echo.
 echo   * look for the tray icon (it may be under the ^^ overflow arrow)
 echo   * settings:  config.json     log:  aio_daemon.log

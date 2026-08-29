@@ -44,6 +44,12 @@ UNINSTALL_STARTUP.bat    removes it
 START_NOW.bat            run it once without installing
 ```
 
+`CREATE_SHORTCUT.bat` puts an **AIO Screen** shortcut on your desktop for
+restarting it after you quit from the tray. The shortcut runs the scheduled
+task rather than the script directly, so it starts elevated **without a UAC
+prompt** — and if the daemon is already running it says so instead of
+starting a second copy.
+
 `aio_daemon.pyw` posts CPU temperature and fan RPM at 1 Hz with no console
 window, and sits in the system tray (hover for live values, right-click for
 config/log/quit). Settings live in `config.json`; problems go to
