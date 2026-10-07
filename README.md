@@ -326,6 +326,11 @@ included or redistributed here, only a description of the wire format.
   the protocol affects cooling was never investigated, deliberately.
 - **Not affiliated** with the vendor, Witmod, or any cooler brand.
 
+## Contributing
+
+Bug reports, reports from other coolers and pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for setup, branches and how to open a PR.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
