@@ -21,10 +21,11 @@ fixes and code are all welcome.
 
 | Branch | Purpose |
 | --- | --- |
-| `main` | Released and in-progress code. **All PRs target `main`.** |
-| `v*` tags | A release, published with `PUBLISH_RELEASE.bat`. |
+| `develop` | Integration branch. **All PRs target `develop`.** |
+| `main` | Released code. Only updated by a release PR from `develop` (or an urgent hotfix). |
+| `v*` tags | A release on `main`, published with `PUBLISH_RELEASE.bat`. |
 
-`main` doesn't accept direct pushes. Everything goes through a pull
+Neither `develop` nor `main` accepts direct pushes. Everything goes through a pull
 request, reviewed by a code owner (see `.github/CODEOWNERS`). The
 protection settings live in [`.github/rulesets/`](.github/rulesets/README.md).
 
@@ -35,6 +36,7 @@ You need Windows and the panel to run anything against real hardware.
 ```bat
 git clone https://github.com/<you>/XTRMLAB-Infinity-Y360-cooling.git
 cd XTRMLAB-Infinity-Y360-cooling
+git checkout develop
 INSTALL.bat
 RUN_DOCTOR.bat
 ```
@@ -61,12 +63,12 @@ hardware.
 
 ## Making a pull request
 
-1. Fork the repo and create a branch from `main`:
-   `git checkout -b fix/short-description main`
+1. Fork the repo and create a branch from `develop`:
+   `git checkout -b fix/short-description develop`
 2. Keep the change focused. One fix or feature per PR is much easier to
    review than several.
 3. Update the README or FINDINGS.md if behaviour or protocol notes change.
-4. Open the PR **against `main`** and fill in the template.
+4. Open the PR **against `develop`** and fill in the template.
 5. A code owner must approve before it can merge.
 
 Branch name prefixes: `fix/`, `feature/`, `docs/`, `test/`.

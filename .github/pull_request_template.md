@@ -8,7 +8,7 @@
 
 ## Checklist
 
-- [ ] Targets `main` and does one thing
+- [ ] Targets `develop` and does one thing
 - [ ] Ran `RUN_DOCTOR.bat` / `python doctor.py` with no new failures
 - [ ] Tested on a real panel, or explained above why not
 - [ ] README or FINDINGS.md updated if behaviour or the protocol notes changed
