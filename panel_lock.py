@@ -17,7 +17,9 @@ How it decides:
   * a lock file records WHO holds it (pid, script, start time, elevated),
     so the second process can print something useful instead of "busy"
   * liveness is verified with OpenProcess, so a lock left behind by a crash
-    is detected and taken over rather than blocking forever
+    is detected and taken over rather than blocking forever; a lock from
+    before the last boot, or whose pid now belongs to a newer process, is
+    stale too (pids get reused, so "something has that pid" is not proof)
 
 The mutex alone is not enough: the daemon runs elevated, and a normal-rights
 process cannot open an elevated process's Global object -- it gets
@@ -39,6 +41,7 @@ kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 ERROR_ALREADY_EXISTS = 183
 ERROR_ACCESS_DENIED = 5
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+STILL_ACTIVE = 259
 
 MUTEX_NAME = "aio_screen_panel"
 def _app_dir():
@@ -56,6 +59,9 @@ kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWS
 kernel32.OpenProcess.restype = wintypes.HANDLE
 kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+kernel32.GetTickCount64.restype = ctypes.c_ulonglong
+kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
 
 
 class PanelBusy(RuntimeError):
@@ -88,6 +94,10 @@ class PanelBusy(RuntimeError):
         return line
 
 
+def _boot_time() -> float:
+    return time.time() - kernel32.GetTickCount64() / 1000.0
+
+
 def _pid_alive(pid: int) -> bool:
     if not pid:
         return False
@@ -97,6 +107,46 @@ def _pid_alive(pid: int) -> bool:
         return True
     # ACCESS_DENIED means it exists but is more privileged than us.
     return ctypes.get_last_error() == ERROR_ACCESS_DENIED
+
+
+def _process_started(pid: int) -> float | None:
+    """Unix start time of a live pid, or None if it can't be read (or exited)."""
+    h = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+    if not h:
+        return None
+    try:
+        code = wintypes.DWORD()
+        if kernel32.GetExitCodeProcess(h, ctypes.byref(code)) and code.value != STILL_ACTIVE:
+            return 0.0  # exited but a handle keeps it around: not a holder
+        created, exited, k, u = (wintypes.FILETIME() for _ in range(4))
+        if not kernel32.GetProcessTimes(h, ctypes.byref(created), ctypes.byref(exited),
+                                        ctypes.byref(k), ctypes.byref(u)):
+            return None
+        ticks = (created.dwHighDateTime << 32) | created.dwLowDateTime
+        return ticks / 1e7 - 11644473600  # FILETIME epoch is 1601
+    finally:
+        kernel32.CloseHandle(h)
+
+
+def _holder_alive(holder: dict) -> bool:
+    """Is the process named in the lock file still the one that wrote it?
+
+    A pid alone is not enough: after a reboot or crash the lock file stays
+    behind and its pid gets handed to some unrelated process, which then
+    looks like a live holder forever.
+    """
+    pid = holder.get("pid", 0)
+    started = holder.get("started") or 0
+    if started and started < _boot_time() - 60:
+        return False  # written before this boot
+    if not _pid_alive(pid):
+        return False
+    proc_started = _process_started(pid)
+    if proc_started == 0.0:
+        return False
+    if started and proc_started and proc_started > started + 5:
+        return False  # pid was reused by a process born after the lock
+    return True
 
 
 def _read_lock() -> dict | None:
@@ -134,7 +184,7 @@ class PanelLock:
             return self
 
         holder = _read_lock()
-        if holder and holder.get("pid") != os.getpid() and _pid_alive(holder.get("pid", 0)):
+        if holder and holder.get("pid") != os.getpid() and _holder_alive(holder):
             raise PanelBusy(holder)
 
         for prefix in ("Global\\", "Local\\"):
