@@ -1,0 +1,16 @@
+# Code owners are requested for review automatically on every pull
+# request that touches the matching paths. The last matching line wins.
+# https://docs.github.com/articles/about-code-owners
+
+*                       @M-Agoumi
+
+# The wire protocol, HID access and release plumbing. A mistake here can
+# send bad reports to the panel or ship a broken exe, so these always
+# need the owner's eyes.
+/.github/               @M-Agoumi
+/aio_screen.py          @M-Agoumi
+/winhid.py              @M-Agoumi
+/panel_lock.py          @M-Agoumi
+/aio_screen.spec        @M-Agoumi
+/BUILD_EXE.bat          @M-Agoumi
+/PUBLISH_RELEASE.bat    @M-Agoumi
