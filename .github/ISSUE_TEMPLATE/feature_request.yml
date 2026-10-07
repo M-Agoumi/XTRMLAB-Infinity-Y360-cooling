@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest something new, or support for another panel.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The problem or use case, not just the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+  - type: input
+    id: panel
+    attributes:
+      label: Panel or cooler, if this is about other hardware
+      description: Model and USB VID:PID from list_hid.py.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Would you like to work on this?
+      options:
+        - label: I'd like to open a pull request for this.
