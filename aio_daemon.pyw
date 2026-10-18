@@ -201,10 +201,15 @@ class Daemon:
             log("WARNING: not elevated -- CPU temp and fan RPM will read 0. "
                 "Install with INSTALL_STARTUP.bat so the task runs with highest privileges.")
         self.sensors = LhmSensors(self.cfg.get("dll"))
-        t = self.sensors.pick_temp(self.cfg.get("temp"))
-        f = self.sensors.pick_fan(self.cfg.get("fan"))
+        # strict: report what the configured names resolve to, not whatever
+        # the fallback lands on -- "GPU Core" here hid a dead CPU driver
+        t = self.sensors.pick_temp(self.cfg.get("temp"), strict=True)
+        f = self.sensors.pick_fan(self.cfg.get("fan"), strict=True)
         log(f"sensors via {self.sensors.dll_path}")
         log(f"temp sensor = {t[1] if t else None!r}, fan sensor = {f[1] if f else None!r}")
+        if self.sensors.cpu_blind():
+            log("ERROR: the CPU is listed but none of its temperatures read -- "
+                + self.sensors.blind_reason())
 
     def _open_panel(self):
         from aio_screen import AioScreen

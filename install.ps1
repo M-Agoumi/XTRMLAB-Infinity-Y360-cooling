@@ -77,7 +77,19 @@ $targets = @(
 )
 $found = $targets | Where-Object { Test-Path $_ } | Select-Object -First 1
 
+# Up to 0.9.4 the library uses the WinRing0 driver, which Microsoft Defender
+# quarantines (VulnerableDriver:WinNT/Winring0) -- the DLL loads, but CPU
+# temperature and motherboard fans read nothing. 0.9.5+ uses PawnIO instead.
+$stale = $false
 if ($found) {
+    $v = (Get-Item $found).VersionInfo
+    if ([version]('{0}.{1}.{2}' -f $v.FileMajorPart, $v.FileMinorPart, $v.FileBuildPart) -lt [version]'0.9.5') {
+        Warn "found $found, but it is $($v.FileVersion), which uses the WinRing0 driver Defender blocks"
+        $stale = $true
+    }
+}
+
+if ($found -and -not $stale) {
     Good "already present: $found"
 } else {
     Say "  not found locally -- fetching from the LibreHardwareMonitor releases"
@@ -87,10 +99,11 @@ if ($found) {
         $rel = Invoke-RestMethod -Uri $api -Headers @{ 'User-Agent' = 'aio_screen-setup' }
         Say "  latest release: $($rel.tag_name)"
 
-        # prefer the .NET Framework 4.7.2 build -- that is what the DLL targets
+        # the .NET Framework build is the one pythonnet's netfx runtime loads;
+        # the .NET.10 zip is listed first and would not load
         $asset = $rel.assets | Where-Object { $_.name -match '\.zip$' -and $_.name -match 'net472' } | Select-Object -First 1
         if (-not $asset) {
-            $asset = $rel.assets | Where-Object { $_.name -match '\.zip$' } | Select-Object -First 1
+            $asset = $rel.assets | Where-Object { $_.name -match '\.zip$' -and $_.name -notmatch '\.NET\.\d' } | Select-Object -First 1
         }
         if (-not $asset) { throw "no .zip asset in the latest release" }
 
@@ -102,27 +115,27 @@ if ($found) {
         Expand-Archive -Path $zip -DestinationPath $tmp -Force
 
         New-Item -ItemType Directory -Path $lib -Force | Out-Null
-        # LibreHardwareMonitorLib needs HidSharp alongside it for some controllers
-        foreach ($name in @('LibreHardwareMonitorLib.dll', 'HidSharp.dll')) {
-            $src = Get-ChildItem -Path $tmp -Recurse -Filter $name -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($src) {
-                Copy-Item $src.FullName (Join-Path $lib $name) -Force
-                Good "$name -> lib\"
-            } elseif ($name -eq 'LibreHardwareMonitorLib.dll') {
-                throw "$name was not inside $($asset.name)"
-            }
+        # 0.9.5+ depends on a dozen assemblies shipped beside it (HidSharp,
+        # BlackSharp.Core, System.*, ...), so take every DLL in the library's
+        # folder rather than a fixed list
+        $main = Get-ChildItem -Path $tmp -Recurse -Filter 'LibreHardwareMonitorLib.dll' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $main) { throw "LibreHardwareMonitorLib.dll was not inside $($asset.name)" }
+        $dlls = Get-ChildItem -Path $main.DirectoryName -Filter '*.dll'
+        foreach ($src in $dlls) {
+            Copy-Item $src.FullName (Join-Path $lib $src.Name) -Force
         }
+        Good "$($dlls.Count) DLLs -> lib\"
         Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
         $notice = Join-Path $lib 'THIRD-PARTY.txt'
         @(
-            "LibreHardwareMonitorLib.dll and HidSharp.dll in this folder are NOT part",
+            "The DLLs in this folder are NOT part",
             "of aio_screen. They were downloaded from:",
             "",
             "  https://github.com/LibreHardwareMonitor/LibreHardwareMonitor",
             "",
             "release: $($rel.tag_name)",
-            "licence: MPL-2.0 (LibreHardwareMonitor), MIT (HidSharp)",
+            "licence: MPL-2.0 (LibreHardwareMonitor); the others carry their own licences",
             "",
             "They are loaded at runtime to read CPU temperature and fan speeds,",
             "which Windows does not expose to an unprivileged process."

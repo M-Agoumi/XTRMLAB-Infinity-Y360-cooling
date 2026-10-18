@@ -151,6 +151,10 @@ def read(rows, name, temp_prefer=None, fan_prefer=None):
         for r in pool:
             if want in r[2].lower():
                 return r[3]
+        # The pinned sensor is missing. Falling through to the pattern would
+        # put a different sensor on the panel -- with the CPU driver blocked,
+        # "Fan #1" became the GPU's idle fan and read a confident 0 rpm.
+        return None
 
     name_re, hw_re = re.compile(name_pat, re.I), re.compile(hw_pat, re.I)
     for hw, _kind, sensor, value in candidates:
