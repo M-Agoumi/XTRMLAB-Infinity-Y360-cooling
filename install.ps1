@@ -123,6 +123,9 @@ if ($found -and -not $stale) {
         $dlls = Get-ChildItem -Path $main.DirectoryName -Filter '*.dll'
         foreach ($src in $dlls) {
             Copy-Item $src.FullName (Join-Path $lib $src.Name) -Force
+            # a downloaded zip marks every file inside as from the internet,
+            # and .NET Framework will not load a DLL carrying that mark
+            Unblock-File (Join-Path $lib $src.Name)
         }
         Good "$($dlls.Count) DLLs -> lib\"
         Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue

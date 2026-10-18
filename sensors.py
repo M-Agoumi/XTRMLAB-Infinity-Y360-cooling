@@ -156,7 +156,21 @@ class LhmSensors:
         dll_dir = os.path.dirname(os.path.abspath(dll_path))
         if dll_dir not in sys.path:
             sys.path.append(dll_dir)
-        clr.AddReference(dll_path)
+        try:
+            clr.AddReference(dll_path)
+        except Exception as e:  # noqa: BLE001
+            # Files unpacked from a zip that Windows saw arrive from the
+            # internet carry a Zone.Identifier stream, and .NET Framework
+            # refuses to load them ("network location ... loadFromRemoteSources").
+            blocked = sorted(n for n in os.listdir(dll_dir)
+                             if n.lower().endswith(".dll")
+                             and os.path.exists(os.path.join(dll_dir, n + ":Zone.Identifier")))
+            if blocked:
+                raise SensorError(
+                    f"Windows has marked {len(blocked)} DLL(s) in {dll_dir} as downloaded "
+                    "from the internet, so .NET will not load them. Unblock them with:\n"
+                    f'    Unblock-File "{dll_dir}\\*.dll"') from e
+            raise
         from LibreHardwareMonitor.Hardware import Computer  # noqa: PLC0415
 
         self._computer = Computer()
