@@ -113,10 +113,25 @@ def main():
     # --- the sensor library --------------------------------------------
     print()
     try:
-        from sensors import find_dll, DLL_CANDIDATES
+        from sensors import (find_dll, DLL_CANDIDATES, dll_version, uses_winring0,
+                             pawnio_installed)
         dll = find_dll()
         if dll:
-            c.ok("LibreHardwareMonitorLib.dll", dll)
+            v = ".".join(map(str, (dll_version(dll) or ("?",))[:3]))
+            if uses_winring0(dll):
+                c.bad("LibreHardwareMonitorLib.dll", f"{v} at {dll} uses the WinRing0 "
+                      "driver, which Microsoft Defender quarantines -- CPU temperature "
+                      "and motherboard fans then read nothing",
+                      "put LibreHardwareMonitorLib.dll 0.9.5 or newer, with the DLLs "
+                      "from its release zip, into lib\\ (INSTALL.bat does this)")
+            else:
+                c.ok("LibreHardwareMonitorLib.dll", f"{v} at {dll}")
+                if pawnio_installed():
+                    c.ok("PawnIO driver", "installed")
+                else:
+                    c.bad("PawnIO driver", "not installed; this library version needs it "
+                          "for CPU and motherboard sensors",
+                          "install it from https://pawnio.eu")
         else:
             c.bad("LibreHardwareMonitorLib.dll", "not found in any known location",
                   "run INSTALL.bat to download it (it is not bundled -- MPL-2.0), "

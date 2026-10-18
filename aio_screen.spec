@@ -36,11 +36,14 @@ datas = [
     ("LICENSE", "."),
 ]
 
-# bundle the sensor library if it has been fetched, plus its licence notice
-for name in ("LibreHardwareMonitorLib.dll", "HidSharp.dll", "THIRD-PARTY.txt"):
-    path = os.path.join(here, "lib", name)
-    if os.path.exists(path):
-        datas.append((path, "lib"))
+# bundle the sensor library if it has been fetched, plus its licence notice.
+# Every DLL in lib/, not a fixed list: 0.9.5+ needs a dozen assemblies beside
+# LibreHardwareMonitorLib.dll and fails to load without them.
+libdir = os.path.join(here, "lib")
+if os.path.isdir(libdir):
+    for name in sorted(os.listdir(libdir)):
+        if name.lower().endswith(".dll") or name == "THIRD-PARTY.txt":
+            datas.append((os.path.join(libdir, name), "lib"))
 
 hiddenimports = [
     "pystray._win32",

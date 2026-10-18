@@ -50,12 +50,67 @@ DLL_CANDIDATES = tuple(
 )
 
 
+# LibreHardwareMonitor up to 0.9.4 reaches the hardware through WinRing0,
+# which it unpacks next to the running exe as <exe>.sys (pythonw.sys here).
+# Microsoft Defender quarantines that file as VulnerableDriver:WinNT/Winring0
+# the moment it appears, and the library then quietly returns no CPU or
+# motherboard readings -- only the GPU, which goes through the vendor driver.
+# 0.9.5 replaced WinRing0 with PawnIO, a signed driver Defender leaves alone.
+PAWNIO_SINCE = (0, 9, 5)
+
+
+def dll_version(path: str) -> tuple | None:
+    """File version of a DLL as (major, minor, build, revision), or None."""
+    try:
+        ver = ctypes.windll.version
+        size = ver.GetFileVersionInfoSizeW(path, None)
+        if not size:
+            return None
+        buf = ctypes.create_string_buffer(size)
+        if not ver.GetFileVersionInfoW(path, 0, size, buf):
+            return None
+        ptr, n = ctypes.c_void_p(), ctypes.c_uint()
+        if not ver.VerQueryValueW(buf, "\\", ctypes.byref(ptr), ctypes.byref(n)):
+            return None
+        # VS_FIXEDFILEINFO: signature, struc version, then FileVersionMS/LS
+        ms, ls = ctypes.cast(ptr, ctypes.POINTER(ctypes.c_uint32))[2:4]
+        return (ms >> 16, ms & 0xFFFF, ls >> 16, ls & 0xFFFF)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def uses_winring0(path: str) -> bool:
+    """True for a library old enough to need the driver Defender blocks."""
+    v = dll_version(path)
+    return v is not None and v[:3] < PAWNIO_SINCE
+
+
 def find_dll(explicit: str | None = None) -> str | None:
-    """First LibreHardwareMonitorLib.dll that actually exists, or None."""
-    for path in ([explicit] if explicit else []) + list(DLL_CANDIDATES):
-        if path and os.path.exists(path):
+    """
+    The LibreHardwareMonitorLib.dll to load, or None.
+
+    An explicit path always wins. Otherwise the first candidate that uses
+    PawnIO, falling back to the first that exists at all: the vendor app's
+    copy is 0.9.4, and picking it over a newer one means no CPU readings.
+    """
+    if explicit and os.path.exists(explicit):
+        return explicit
+    present = [p for p in DLL_CANDIDATES if os.path.exists(p)]
+    for path in present:
+        if not uses_winring0(path):
             return path
-    return None
+    return present[0] if present else None
+
+
+def pawnio_installed() -> bool:
+    """Is the PawnIO driver service registered? 0.9.5+ needs it."""
+    try:
+        import winreg
+        winreg.CloseKey(winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services\PawnIO"))
+        return True
+    except OSError:
+        return False
 
 
 DEFAULT_DLL = DLL_CANDIDATES[1]
@@ -95,6 +150,12 @@ class LhmSensors:
         except ImportError as e:
             raise SensorError(f"pythonnet is not installed ({e}). pip install pythonnet") from e
 
+        # 0.9.5+ depends on several assemblies shipped beside it; .NET only
+        # finds them if their folder is on the probing path, which pythonnet
+        # builds from sys.path.
+        dll_dir = os.path.dirname(os.path.abspath(dll_path))
+        if dll_dir not in sys.path:
+            sys.path.append(dll_dir)
         clr.AddReference(dll_path)
         from LibreHardwareMonitor.Hardware import Computer  # noqa: PLC0415
 
@@ -123,6 +184,35 @@ class LhmSensors:
                     yield sub, s
 
     # -- public -------------------------------------------------------
+    def cpu_blind(self) -> bool:
+        """
+        True when the CPU is listed but none of its temperatures read.
+
+        That is the driver failing to start, not a missing sensor: the
+        library still enumerates every CPU core, it just gets no values.
+        """
+        self._refresh()
+        seen = False
+        for hw, sen in self._walk():
+            if str(hw.HardwareType) == "Cpu" and str(sen.SensorType) == "Temperature":
+                seen = True
+                if sen.Value is not None:
+                    return False
+        return seen
+
+    def blind_reason(self) -> str:
+        """Best guess at why cpu_blind() is true, in one line."""
+        if not self._admin:
+            return "not running as administrator, so the sensor driver cannot start"
+        if uses_winring0(self.dll_path):
+            v = ".".join(map(str, (dll_version(self.dll_path) or ())[:3]))
+            return (f"LibreHardwareMonitorLib {v} uses the WinRing0 driver, which "
+                    "Microsoft Defender quarantines; install LibreHardwareMonitor "
+                    "0.9.5 or newer (it uses PawnIO) into lib\\")
+        if not pawnio_installed():
+            return "the PawnIO driver is not installed (https://pawnio.eu)"
+        return "the sensor driver did not start; check Defender's protection history"
+
     def snapshot(self) -> dict:
         """{(hardware, sensor_type, name): value} for everything readable."""
         self._refresh()

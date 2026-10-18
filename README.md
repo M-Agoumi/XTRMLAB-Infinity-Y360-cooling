@@ -180,6 +180,15 @@ is present at
 `--dll`/`config.json` elsewhere if you have your own copy. This still requires
 running elevated, because the library's driver does.
 
+Use **LibreHardwareMonitor 0.9.5 or newer**, which reaches the hardware
+through the [PawnIO](https://pawnio.eu) driver (install it once). Versions up
+to 0.9.4, including the copy PC Monitor ships, use WinRing0 instead: Microsoft
+Defender quarantines it as `VulnerableDriver:WinNT/Winring0` as soon as it is
+unpacked, and from then on only the GPU reads. The daemon log says so with an
+`ERROR: the CPU is listed but none of its temperatures read` line, and
+`--doctor` flags the old DLL. `INSTALL.bat` replaces it with the current
+release.
+
 Prefer not to run elevated? Run the LibreHardwareMonitor GUI with its web
 server enabled and use `--lhm http://localhost:8085/data.json` instead.
 
